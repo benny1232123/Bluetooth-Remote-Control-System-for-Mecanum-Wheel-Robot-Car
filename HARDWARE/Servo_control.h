@@ -3,15 +3,15 @@
 
 #include "ALL_Head.h"
 
-#define Servo_clip_hold    180   //129-137
+#define Servo_clip_hold    270   //129-137
 #define Servo_clip_loosen  150 //90-103
 
 #define Servo_turntable_front   0
 #define Servo_turntable_behind  250
 
 #define Servo_platform_one   135
-#define Servo_platform_two   232
-#define Servo_platform_three  45
+#define Servo_platform_two   260
+#define Servo_platform_three  10
 
 
 extern uint16_t Servo_clip_duty;

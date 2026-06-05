@@ -4,26 +4,25 @@ int flag_do_task = -3; //总任务标志位
 #define TEST_MODE 0
 #define BT_USE_UART5 1
 #define BT_HOLD_MODE 1
-#define BT_LIFT_UP_CLK 12000
-#define BT_LIFT_DOWN_CLK 3500
+#define BT_LIFT_UP_CLK 3000
+#define BT_LIFT_DOWN_CLK 3000
 #define BT_LIFT_VEL 150
 #define BT_TURNTABLE_STEP 10
 #define BT_PLATFORM_STEP 5
 #define BT_CLIP_STEP 2
 #define BT_TURNTABLE_STEP_180 180
-#define BT_PLATFORM_STEP_90 90
-#define BT_HOLD_STEP_TICKS 1
 #define BT_CMD_TURNTABLE_180_CW 'G'
 #define BT_CMD_TURNTABLE_180_CCW 'I'
-#define BT_CMD_PLATFORM_90_CW 'T'
-#define BT_CMD_PLATFORM_90_CCW 'Y'
+#define BT_PLATFORM_STEP_125 125
+#define BT_CMD_PLATFORM_125_CW 'T'
+#define BT_CMD_PLATFORM_125_CCW 'Y'
 
 static const uint16_t bt_clip_min = Servo_clip_loosen;
 static const uint16_t bt_clip_max = Servo_clip_hold;
-static const uint16_t bt_turntable_min = Servo_turntable_front;
-static const uint16_t bt_turntable_max = Servo_turntable_behind;
-static const uint16_t bt_platform_min = Servo_platform_three;
-static const uint16_t bt_platform_max = Servo_platform_two;
+//static const uint16_t bt_turntable_min = Servo_turntable_front;
+//static const uint16_t bt_turntable_max = Servo_turntable_behind;
+//static const uint16_t bt_platform_min = Servo_platform_three;
+//static const uint16_t bt_platform_max = Servo_platform_two;
 
 static volatile uint8_t bt_cmd = 0;
 static volatile uint8_t bt_speed_level = 2;
@@ -34,9 +33,9 @@ static volatile float bt_w = 0.0f;
 static volatile uint16_t bt_clip_target = Servo_clip_loosen;
 static volatile unsigned long bt_last_rx_tick = 0;
 static volatile unsigned long bt_last_tx_tick = 0;
-static volatile int8_t bt_turntable_hold = 0; // -1 left, +1 right
-static volatile int8_t bt_platform_hold = 0;  // -1 right, +1 left
-static volatile uint8_t bt_hold_tick = 0;
+//static volatile int8_t bt_turntable_hold = 0; // -1 left, +1 right
+//static volatile int8_t bt_platform_hold = 0;  // -1 right, +1 left
+//static volatile uint8_t bt_hold_tick = 0;
 static volatile uint8_t openmv_grab_pending = 0;
 
 #define BT_TIMEOUT_TICKS 5 // 0.5s @ 10Hz
@@ -188,38 +187,27 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 			Emm_V5_Stop_Now(USART2, 1, 0);
 			break;
 
-		case 'O': // claw open (single action on press)
-			if (is_press) bt_clip_target = bt_clip_min;
+		case 'O': // claw open (instant)
+			if (is_press) { Servo_clip_duty = bt_clip_min; bt_clip_target = bt_clip_min; }
 			break;
-		case 'P': // claw close (single action on press)
-			if (is_press) bt_clip_target = bt_clip_max;
+		case 'P': // claw close (instant)
+			if (is_press) { Servo_clip_duty = bt_clip_max; bt_clip_target = bt_clip_max; }
 			break;
 
 		case 'J': // turntable left
 			if (is_press)
 			{
 				Servo_turntable_duty = constrain_uint16_t((uint16_t)(Servo_turntable_duty + BT_TURNTABLE_STEP), turntable_min, turntable_max);
-				bt_turntable_hold = 1;
-			}
-			else
-			{
-				bt_turntable_hold = 0;
 			}
 			break;
 		case 'K': // turntable right
 			if (is_press)
 			{
 				Servo_turntable_duty = constrain_uint16_t((uint16_t)(Servo_turntable_duty - BT_TURNTABLE_STEP), turntable_min, turntable_max);
-				bt_turntable_hold = -1;
-			}
-			else
-			{
-				bt_turntable_hold = 0;
 			}
 			break;
 		case 'C': // turntable center
 			if (is_press) Servo_turntable_duty = turntable_mid;
-			bt_turntable_hold = 0;
 			break;
 		case BT_CMD_TURNTABLE_180_CW: // turntable +180
 			if (is_press)
@@ -237,38 +225,27 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 			if (is_press)
 			{
 				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty + BT_PLATFORM_STEP), platform_min, platform_max);
-				bt_platform_hold = 1;
-			}
-			else
-			{
-				bt_platform_hold = 0;
 			}
 			break;
 		case 'E': // platform right
 			if (is_press)
 			{
 				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP), platform_min, platform_max);
-				bt_platform_hold = -1;
-			}
-			else
-			{
-				bt_platform_hold = 0;
 			}
 			break;
 		case 'V': // platform center
 			if (is_press) Servo_platform_duty = platform_mid;
-			bt_platform_hold = 0;
 			break;
-		case BT_CMD_PLATFORM_90_CW: // platform +90
+		case BT_CMD_PLATFORM_125_CW: // platform +125
 			if (is_press)
 			{
-				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty + BT_PLATFORM_STEP_90), platform_min, platform_max);
+				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty + BT_PLATFORM_STEP_125), platform_min, platform_max);
 			}
 			break;
-		case BT_CMD_PLATFORM_90_CCW: // platform -90
+		case BT_CMD_PLATFORM_125_CCW: // platform -125
 			if (is_press)
 			{
-				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP_90), platform_min, platform_max);
+				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP_125), platform_min, platform_max);
 			}
 			break;
 		default:
@@ -662,31 +639,6 @@ void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
 					{
 						Servo_clip_duty = bt_clip_max;
 						openmv_grab_pending = 0;
-					}
-
-					if (bt_turntable_hold != 0 || bt_platform_hold != 0)
-					{
-						bt_hold_tick++;
-						if (bt_hold_tick >= BT_HOLD_STEP_TICKS)
-						{
-							bt_hold_tick = 0;
-							if (bt_turntable_hold > 0)
-							{
-								Servo_turntable_duty = constrain_uint16_t((uint16_t)(Servo_turntable_duty + BT_TURNTABLE_STEP), bt_turntable_min, bt_turntable_max);
-							}
-							else if (bt_turntable_hold < 0)
-							{
-								Servo_turntable_duty = constrain_uint16_t((uint16_t)(Servo_turntable_duty - BT_TURNTABLE_STEP), bt_turntable_min, bt_turntable_max);
-							}
-							if (bt_platform_hold > 0)
-							{
-								Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty + BT_PLATFORM_STEP), bt_platform_min, bt_platform_max);
-							}
-							else if (bt_platform_hold < 0)
-							{
-								Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP), bt_platform_min, bt_platform_max);
-							}
-						}
 					}
 
 				#if TEST_MODE
