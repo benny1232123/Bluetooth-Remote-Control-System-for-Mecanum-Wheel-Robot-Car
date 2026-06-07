@@ -40,7 +40,6 @@
 ..\obj\encoder.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\encoder.o: ..\HARDWARE\gui.h
 ..\obj\encoder.o: ..\HARDWARE\ALL_Head.h
-..\obj\encoder.o: ..\HARDWARE\test.h
 ..\obj\encoder.o: ..\HARDWARE\Encoder.h
 ..\obj\encoder.o: ..\HARDWARE\usart.h
 ..\obj\encoder.o: ..\HARDWARE\Motor_control.h

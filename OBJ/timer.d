@@ -40,7 +40,6 @@
 ..\obj\timer.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\timer.o: ..\HARDWARE\gui.h
 ..\obj\timer.o: ..\HARDWARE\ALL_Head.h
-..\obj\timer.o: ..\HARDWARE\test.h
 ..\obj\timer.o: ..\HARDWARE\Encoder.h
 ..\obj\timer.o: ..\HARDWARE\usart.h
 ..\obj\timer.o: ..\HARDWARE\Motor_control.h

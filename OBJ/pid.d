@@ -40,7 +40,6 @@
 ..\obj\pid.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\pid.o: ..\HARDWARE\gui.h
 ..\obj\pid.o: ..\HARDWARE\ALL_Head.h
-..\obj\pid.o: ..\HARDWARE\test.h
 ..\obj\pid.o: ..\HARDWARE\Encoder.h
 ..\obj\pid.o: ..\HARDWARE\usart.h
 ..\obj\pid.o: ..\HARDWARE\Motor_control.h

@@ -41,7 +41,6 @@
 ..\obj\gui.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 ..\obj\gui.o: ..\HARDWARE\led.h
 ..\obj\gui.o: ..\HARDWARE\gui.h
-..\obj\gui.o: ..\HARDWARE\test.h
 ..\obj\gui.o: ..\HARDWARE\Encoder.h
 ..\obj\gui.o: ..\HARDWARE\usart.h
 ..\obj\gui.o: ..\HARDWARE\Motor_control.h

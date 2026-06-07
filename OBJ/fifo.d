@@ -40,7 +40,6 @@
 ..\obj\fifo.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\fifo.o: ..\HARDWARE\gui.h
 ..\obj\fifo.o: ..\HARDWARE\ALL_Head.h
-..\obj\fifo.o: ..\HARDWARE\test.h
 ..\obj\fifo.o: ..\HARDWARE\Encoder.h
 ..\obj\fifo.o: ..\HARDWARE\usart.h
 ..\obj\fifo.o: ..\HARDWARE\Motor_control.h

@@ -40,7 +40,6 @@
 ..\obj\led.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\led.o: ..\HARDWARE\gui.h
 ..\obj\led.o: ..\HARDWARE\ALL_Head.h
-..\obj\led.o: ..\HARDWARE\test.h
 ..\obj\led.o: ..\HARDWARE\Encoder.h
 ..\obj\led.o: ..\HARDWARE\usart.h
 ..\obj\led.o: ..\HARDWARE\Motor_control.h

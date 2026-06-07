@@ -8,7 +8,6 @@
 "..\obj\motor_control.o"
 "..\obj\servo_control.o"
 "..\obj\spi.o"
-"..\obj\test.o"
 "..\obj\usart.o"
 "..\obj\timer.o"
 "..\obj\led.o"

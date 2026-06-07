@@ -40,7 +40,6 @@
 ..\obj\servo_control.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\servo_control.o: ..\HARDWARE\gui.h
 ..\obj\servo_control.o: ..\HARDWARE\ALL_Head.h
-..\obj\servo_control.o: ..\HARDWARE\test.h
 ..\obj\servo_control.o: ..\HARDWARE\Encoder.h
 ..\obj\servo_control.o: ..\HARDWARE\usart.h
 ..\obj\servo_control.o: ..\HARDWARE\Motor_control.h

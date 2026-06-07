@@ -1,7 +1,6 @@
 #include "ALL_Head.h"
-int flag_do_task = -3; //总任务标志位
+int flag_do_task = -100; //-100=空闲, -3~5=自动任务进行中
 
-#define TEST_MODE 0
 #define BT_USE_UART5 1
 #define BT_HOLD_MODE 1
 #define BT_LIFT_UP_CLK 3000
@@ -16,6 +15,7 @@ int flag_do_task = -3; //总任务标志位
 #define BT_PLATFORM_STEP_125 125
 #define BT_CMD_PLATFORM_125_CW 'T'
 #define BT_CMD_PLATFORM_125_CCW 'Y'
+#define BT_CMD_TASK_START 'M'
 
 static const uint16_t bt_clip_min = Servo_clip_loosen;
 static const uint16_t bt_clip_max = Servo_clip_hold;
@@ -37,8 +37,11 @@ static volatile unsigned long bt_last_tx_tick = 0;
 //static volatile int8_t bt_platform_hold = 0;  // -1 right, +1 left
 //static volatile uint8_t bt_hold_tick = 0;
 static volatile uint8_t openmv_grab_pending = 0;
+static volatile uint8_t openmv_camera_test = 0;
+static volatile uint8_t openmv_drive_timer = 0;
+static volatile uint8_t camera_auto_align = 0;
 
-#define BT_TIMEOUT_TICKS 5 // 0.5s @ 10Hz
+#define BT_TIMEOUT_TICKS 1 // 0.1s @ 10Hz
 #define BT_HEARTBEAT_TICKS 2 // 0.2s @ 10Hz
 
 static void BT_ApplyCommand(uint8_t raw_cmd)
@@ -248,105 +251,38 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP_125), platform_min, platform_max);
 			}
 			break;
+		case BT_CMD_TASK_START: // start auto task
+			if (is_press)
+			{
+				flag_do_task = -3;
+				bt_vx = 0.0f; bt_vy = 0.0f; bt_w = 0.0f; my_car.stop_flag = 1;
+			}
+			break;
+		case 'W': // toggle camera test mode
+			if (is_press) { openmv_camera_test = !openmv_camera_test; bt_drive_mode = 1; }
+			break;
+		case 'H': // toggle camera auto-tracking (car moves to center target)
+			if (is_press)
+			{
+				camera_auto_align = !camera_auto_align;
+				if (camera_auto_align)
+				{
+					Openmv_track_start = 1;
+					bt_drive_mode = 0;
+					bt_vx = 0.0f; bt_vy = 0.0f; bt_w = 0.0f; my_car.stop_flag = 1;
+				}
+				else
+				{
+					Openmv_track_start = 0;
+					bt_drive_mode = 1;
+				}
+			}
+			break;
 		default:
 			break;
 	}
 	bt_cmd = 0;
 }
-
-#if TEST_MODE
-static volatile uint8_t test_override_active = 1;
-static volatile int16_t test_motor_target_1 = 0;
-static volatile int16_t test_motor_target_2 = 0;
-static volatile int16_t test_motor_target_3 = 0;
-static volatile int16_t test_motor_target_4 = 0;
-static volatile uint16_t test_step = 0;
-static volatile uint16_t test_step_tick = 0;
-static volatile uint16_t test_last_step = 0xFFFF;
-
-static void TestSequence_Tick(void)
-{
-	const uint16_t step_ticks = 20; // 2.0s @ 100ms per tick
-	const int16_t speed = 40; // cm/s target for wheel speed loop
-
-	test_step_tick++;
-
-	if (test_step != test_last_step)
-	{
-		switch (test_step)
-		{
-			case 0: // forward
-				my_car.stop_flag = 0;
-				test_motor_target_1 = speed;
-				test_motor_target_2 = speed;
-				test_motor_target_3 = speed;
-				test_motor_target_4 = speed;
-				break;
-			case 1: // stop
-				my_car.stop_flag = 1;
-				test_motor_target_1 = 0;
-				test_motor_target_2 = 0;
-				test_motor_target_3 = 0;
-				test_motor_target_4 = 0;
-				break;
-			case 2: // backward
-				my_car.stop_flag = 0;
-				test_motor_target_1 = -speed;
-				test_motor_target_2 = -speed;
-				test_motor_target_3 = -speed;
-				test_motor_target_4 = -speed;
-				break;
-			case 3: // stop
-				my_car.stop_flag = 1;
-				test_motor_target_1 = 0;
-				test_motor_target_2 = 0;
-				test_motor_target_3 = 0;
-				test_motor_target_4 = 0;
-				break;
-			case 4: // right strafe
-				my_car.stop_flag = 0;
-				test_motor_target_1 = -speed;
-				test_motor_target_2 = speed;
-				test_motor_target_3 = -speed;
-				test_motor_target_4 = speed;
-				break;
-			case 5: // stop
-				my_car.stop_flag = 1;
-				test_motor_target_1 = 0;
-				test_motor_target_2 = 0;
-				test_motor_target_3 = 0;
-				test_motor_target_4 = 0;
-				break;
-			case 6: // rotate CW
-				my_car.stop_flag = 0;
-				test_motor_target_1 = speed;
-				test_motor_target_2 = speed;
-				test_motor_target_3 = -speed;
-				test_motor_target_4 = -speed;
-				break;
-			case 7: // stop
-				my_car.stop_flag = 1;
-				test_motor_target_1 = 0;
-				test_motor_target_2 = 0;
-				test_motor_target_3 = 0;
-				test_motor_target_4 = 0;
-				break;
-			default:
-				test_step = 0;
-				test_step_tick = 0;
-				test_last_step = 0xFFFF;
-				return;
-		}
-		test_last_step = test_step;
-	}
-
-	if (test_step_tick >= step_ticks)
-	{
-		test_step++;
-		test_step_tick = 0;
-	}
-}
-#endif
 
 int main(void)
 {	
@@ -362,7 +298,7 @@ int main(void)
 	uart4_init(115200);//TX:GPIOC.10;   RX:GPIOC.11初始化 openmv
 	uart5_init(9600); // UART5: PC12(TX), PD2(RX)
 	Motor_Init();
-  Servo_Init();
+	Servo_Init();
 	
 	LCD_Init();	   //液晶屏初始化
 	Button_Control_init();
@@ -388,70 +324,6 @@ int main(void)
 
 	while(1)
 	{
-
-//		main_test(); 		//测试主界面
-//		Test_Color();  		//简单刷屏填充测试
-//		Test_FillRec();		//GUI矩形绘图测试
-//		Test_Circle(); 		//GUI画圆测试
-//		Test_Triangle();    //GUI三角形绘图测试
-//		English_Font_test();//英文字体示例测试
-//		Chinese_Font_test();//中文字体示例测试
-//		Pic_test();			//图片显示示例测试
-//		Rotate_Test();   //旋转显示测试
-		
-//		GUI_DrawFont48_one(0,100,BLUE,YELLOW,0,1);  //自己写的显示函数，
-//		GUI_DrawFont48_one(48+3,100,BLUE,YELLOW,1,1);  //自己写的显示函数，
-//		GUI_DrawFont48_one((48+3)*2,100,BLUE,YELLOW,2,1);  //自己写的显示函数，
-//		GUI_DrawFont48_one((48+3)*3,100,BLUE,YELLOW,3,1);  //自己写的显示函数，
-
-//		GUI_DrawFont64_one(0,100,BLUE,YELLOW,0,1);  //自己写的显示函数，
-//		GUI_DrawFont64_one(64,100,BLUE,YELLOW,1,1);  //自己写的显示函数，
-//		GUI_DrawFont64_one(64*2,100,BLUE,YELLOW,2,1);  //自己写的显示函数，
-//		GUI_DrawFont64_one(64*3,100,BLUE,YELLOW,3,1);  //自己写的显示函数，
-
-//			GUI_DrawFont40_80_one(0,50,BLUE,YELLOW,0,1); //自己写的显示函数，单个10mm字体
-//			GUI_DrawFont40_80_one(40,50,BLUE,YELLOW,1,1);
-//			GUI_DrawFont40_80_one(40,50,BLUE,YELLOW,2,1);
-//			GUI_DrawFont40_80_one(0,50+80,BLUE,YELLOW,3,1);
-//			GUI_DrawFont40_80_one(0,50+80*2,BLUE,YELLOW,0,1);
-//			GUI_DrawFont40_80_one(40,50+80*2,BLUE,YELLOW,1,1);
-//			GUI_DrawFont40_80_one(40*2,50+80*2,BLUE,YELLOW,2,1);
-			
-//			if(QR_codeRx_Date > 0)
-//			{
-//				LCD_Fill(0,50,40*3,50+80*3,YELLOW);
-//				GUI_DrawFont40_80_one(0,50,BLUE,YELLOW, QR_codeRx_Date/100000 - 1,1);//显示二维码第一位
-//				GUI_DrawFont40_80_one(40,50,BLUE,YELLOW,(QR_codeRx_Date/10000)%10 - 1,1);//显示二维码第二位
-//				GUI_DrawFont40_80_one(40*2,50,BLUE,YELLOW,(QR_codeRx_Date/1000)%10 - 1,1);//显示二维码
-//				GUI_DrawFont40_80_one(0,50+80,BLUE,YELLOW,3,1);
-//				GUI_DrawFont40_80_one(0,50+80*2,BLUE,YELLOW,(QR_codeRx_Date/100)%10 - 1,1);//显示二维码第四位
-//				GUI_DrawFont40_80_one(40*1,50+80*2,BLUE,YELLOW,(QR_codeRx_Date/10)%10 - 1,1);//显示二维码
-//				GUI_DrawFont40_80_one(40*2,50+80*2,BLUE,YELLOW, QR_codeRx_Date%10  - 1,1);//显示二维码
-//				delay_ms(500);                     //延时500ms
-//			}
-
-//VY=正数
-//      mortor_TB6612Set(motorFL_PWM, motorFL_IN1, motorFL_IN2, (int32_t)2500, motorFL_MAX, motorFL_Die);
-//      mortor_TB6612Set(motorFR_PWM, motorFR_IN1, motorFR_IN2, (int32_t)2500, motorFR_MAX, motorFR_Die);
-//      mortor_TB6612Set(motorBR_PWM, motorBR_IN1, motorBR_IN2, (int32_t)2500, motorBR_MAX, motorBR_Die);
-//      mortor_TB6612Set(motorBL_PWM, motorBL_IN1, motorBL_IN2, (int32_t)2500, motorBL_MAX, motorBL_Die);
-	
-//VX=正数
-//      mortor_TB6612Set(motorFL_PWM, motorFL_IN1, motorFL_IN2, (int32_t)2500, motorFL_MAX, motorFL_Die);
-//      mortor_TB6612Set(motorFR_PWM, motorFR_IN1, motorFR_IN2, (int32_t)-2500, motorFR_MAX, motorFR_Die);
-//      mortor_TB6612Set(motorBR_PWM, motorBR_IN1, motorBR_IN2, (int32_t)2500, motorBR_MAX, motorBR_Die);
-//      mortor_TB6612Set(motorBL_PWM, motorBL_IN1, motorBL_IN2, (int32_t)-2500, motorBL_MAX, motorBL_Die);
-
-//		USART_SendData(USART1, 'A');//向串口发送数据
-//		USART_SendData(USART2, 'B');//向串口发送数据
-//		USART_SendData(USART3, 'C');//向串口发送数据
-//		USART_SendData(UART4, 'E');//向串口发送数据
-//    USART_SendData(UART5, 'E');//向串口发送数据
-		
-//		if(flag_do_task == -3 ) //根据flag_do_task总任务标志位决定何时发送何种数据
-		//USART_SendData(UART4, 'A');//向openmv发送数据，控制识别什么颜色
-		// 遥控版不再周期性向 OpenMV 发送自动请求
-
 		char txt[32];
 		unsigned int k = 4;
     unsigned int d = 16;
@@ -523,6 +395,8 @@ int main(void)
 		k+=d;
 		sprintf(txt, "task:%d ",flag_do_task);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
+		sprintf(txt, "align:%d ",camera_auto_align);
+		Show_Str(80,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		
 		k+=d;
 		sprintf(txt, "u1:%c ",uart1_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
@@ -602,12 +476,6 @@ void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
 
 				Timer7_count ++;//用于计时
 
-#if TEST_MODE
-				if (test_override_active)
-				{
-					TestSequence_Tick();
-				}
-#else
 						if ((Timer7_count - bt_last_tx_tick) >= BT_HEARTBEAT_TICKS)
 						{
 							#if BT_USE_UART5
@@ -641,156 +509,67 @@ void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
 						openmv_grab_pending = 0;
 					}
 
-				#if TEST_MODE
-				if(key3_flag == 1)
+					if (openmv_drive_timer > 0)
+					{
+						bt_vx = 0.0f; bt_vy = 30.0f; bt_w = 0.0f; my_car.stop_flag = 0;
+						openmv_drive_timer--;
+						if (openmv_drive_timer == 0) { bt_vx = 0.0f; bt_vy = 0.0f; bt_w = 0.0f; my_car.stop_flag = 1; }
+					}
+
+				if (flag_do_task == -3)
 				{
-//								if(flag_do_task == -3)
-//					{
-//							my_car.target_y = -70;//到达目标位置，当前位置
-//							flag_do_task = -2;//进入下一状态的判断条件
-//					}
-//					if(flag_do_task == -2 && fabs(my_car.target_y - my_car.now_y) <= 3 ) //当与目标位置误差小于一定值
-//					{
-//							my_car.target_x = 70;//到达目标位置
-//							flag_do_task = 3;//进入下一状态的判断条件
-//					}
-//					if(flag_do_task == 3 &&  fabs(my_car.target_x - my_car.now_x) <= 10 )//延迟1000ms
-//					{
-//							my_car.target_yaw = -90;  //旋转车身
-//							flag_do_task = 4;//进入下一状态的判断条件
-//					}				
-//					if(flag_do_task == 4 &&  fabs(my_car.target_yaw - YAW) <= 1 ) //当与目标位置误差小于一定值
-//					{
-//							my_car.target_y = 0;//到达目标位置
-//							flag_do_task = 130;//进入下一状态的判断条件
-//					}
-//					if(flag_do_task == 130 && fabs(my_car.target_y - my_car.now_y) <= 3 ) //当与目标位置误差小于一定值
-//					{
-//							my_car.target_x = 0;//到达目标位置
-//							flag_do_task = 133;//进入下一状态的判断条件
-//					}
-					
-						if(flag_do_task == -3)
-					{
-							my_car.target_y = -70;//到达目标位置，当前位置
-							flag_do_task = -2;//进入下一状态的判断条件
-					}
-					if(flag_do_task == -2 && fabs(my_car.target_y - my_car.now_y) <= 3 ) //当与目标位置误差小于一定值
-					{
-							my_car.target_x = 70;//到达目标位置
-							flag_do_task = -1;//进入下一状态的判断条件
-					}
-					if(flag_do_task == -1 &&  fabs(my_car.target_x - my_car.now_x) <= 3 ) //当与目标位置误差小于一定值
-					{
-							Openmv_track_start = 1; //开启openmv颜色追踪
-							flag_do_task = 0;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 0 && abs(opemv_Y-opemv_middle_Y)<= 5 && abs(opemv_X-opemv_middle_X)<= 5)//当与目标位置误差小于一定值
-					{
-							Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 12000, false, false); //放下爪子，目前位置12000
-							//甚至此处进行偏差角度等矫正
-					my_car.now_x =70 ;//x轴矫正
-					my_car.now_y =-70 ;//y轴矫正
-						
-							my_car.target_x = my_car.now_x;//令当前位置为目标点位
-							my_car.target_y = my_car.now_y;//令当前位置为目标点位 
-							Openmv_track_start = 0;//关闭openmv颜色追踪
-						
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 1;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 1 && Timer7_count >= 10)//延迟1000ms
-					{
-						  Servo_clip_duty = Servo_clip_hold;//爪子夹取
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 2;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 2 && Timer7_count >= 10)//延迟1000ms
-					{
-							Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 12000, false, false); //抬起爪子，目前位置0000
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 100;//进入下一状态的判断条件
-					}			
-					if(flag_do_task == 100 && Timer7_count >= 10)//延迟1000ms
-					{
-							Servo_turntable_duty = Servo_turntable_behind;//旋转爪子转台到后面
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 101;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 101 && Timer7_count >= 10)//延迟1000ms
-					{
-							Servo_clip_duty = Servo_clip_loosen;//松开爪子
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 3;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 3 && Timer7_count >= 10)//延迟1000ms
-					{
-							my_car.target_yaw = -90;  //旋转车身
-							Servo_turntable_duty = Servo_turntable_front;//旋转爪子转台到前面
-							flag_do_task = 4;//进入下一状态的判断条件
-					}				
-					if(flag_do_task == 4 &&  fabs(my_car.target_yaw - YAW) <= 1 ) //当与目标位置误差小于一定值
-					{
-							my_car.target_y = -140;//到达目标位置
-							flag_do_task = 130;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 130 && fabs(my_car.target_y - my_car.now_y) <= 3 )//当与目标位置误差小于一定值
-					{
-							Servo_turntable_duty = Servo_turntable_behind;//旋转爪子转台到后面
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 131;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 131 && Timer7_count >= 10)//延迟1000ms
-					{
-							Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 3500, false, false); //放下爪子，目前位置3500
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 132;//进入下一状态的判断条件
-					}			
-					if(flag_do_task == 132 && Timer7_count >= 10)//延迟1000ms
-					{
-							Servo_clip_duty = Servo_clip_hold;//爪子夹取
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 133;//进入下一状态的判断条件
-					}		
-					if(flag_do_task == 133 && Timer7_count >= 10)//延迟1000ms
-					{
-							Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 3500, false, false); //抬起爪子，目前位置000
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 134;//进入下一状态的判断条件
-					}		
-					if(flag_do_task == 134 && Timer7_count >= 10)//延迟1000ms
-					{
-							Servo_turntable_duty = Servo_turntable_front;//旋转爪子转台到前面
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 5;//进入下一状态的判断条件
-					}		
-					if(flag_do_task == 5 && Timer7_count >= 10)//延迟1000ms
-					{
-							Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 12000, false, false); //放下爪子，目前位置12000
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 6;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 6 && Timer7_count >= 10)//延迟1000ms
-					{
-						  Servo_clip_duty = Servo_clip_loosen;//爪子松开
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 7;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 7 && Timer7_count >= 10)
-					{
-							Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 12000, false, false); //抬起爪子.，目前位置1000
-							Timer7_count = 0;//计数清零，目的进行延迟处理
-							flag_do_task = 8;//进入下一状态的判断条件
-					}
-					if(flag_do_task == 8 && Timer7_count >= 10)//延迟1000ms
-					{
-							my_car.target_yaw = 90;  //旋转车身
-							flag_do_task = 9;//进入下一状态的判断条件
-							key3_flag = 0;//按键标志位置0，此次按键事件结束
-						}	
-					}	
-				#endif
-		#endif
+					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 500, false, false);
+					Timer7_count = 0;
+					flag_do_task = -2;
+				}
+				if (flag_do_task == -2 && Timer7_count >= 10)
+				{
+					Servo_clip_duty = Servo_clip_hold;
+					Timer7_count = 0;
+					flag_do_task = -1;
+				}
+				if (flag_do_task == -1 && Timer7_count >= 10)
+				{
+					Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 12000, false, false);
+					Timer7_count = 0;
+					flag_do_task = 0;
+				}
+				if (flag_do_task == 0 && Timer7_count >= 10)
+				{
+					Servo_turntable_duty = Servo_turntable_behind;
+					Timer7_count = 0;
+					flag_do_task = 1;
+				}
+				if (flag_do_task == 1 && Timer7_count >= 10)
+				{
+					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 500, false, false);
+					Timer7_count = 0;
+					flag_do_task = 2;
+				}
+				if (flag_do_task == 2 && Timer7_count >= 10)
+				{
+					Servo_clip_duty = Servo_clip_loosen;
+					Timer7_count = 0;
+					flag_do_task = 3;
+				}
+				if (flag_do_task == 3 && Timer7_count >= 10)
+				{
+					Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 3500, false, false);
+					Timer7_count = 0;
+					flag_do_task = 4;
+				}
+				if (flag_do_task == 4 && Timer7_count >= 10)
+				{
+					Servo_turntable_duty = Servo_turntable_front;
+					Timer7_count = 0;
+					flag_do_task = 5;
+				}
+				if (flag_do_task == 5)
+				{
+					flag_do_task = -100;
+					bt_drive_mode = 1;
+				}
+
 				LED3=!LED3;
 
 		TIM_ClearITPendingBit(TIM7, TIM_IT_Update);//清除TIMx更新中断标志
@@ -836,25 +615,8 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
 			
 			speed_translation(&my_car.motor_1);speed_translation(&my_car.motor_2);speed_translation(&my_car.motor_3);speed_translation(&my_car.motor_4);//计算轮速
 
-#if TEST_MODE
-            if (test_override_active)
-            {
-                my_car.target_yaw = 0;
-                my_car.v_x = 0;
-                my_car.v_y = 0;
-                my_car.w = 0;
-
-                my_car.motor_1.target_speed = test_motor_target_1;
-                my_car.motor_2.target_speed = test_motor_target_2;
-                my_car.motor_3.target_speed = test_motor_target_3;
-                my_car.motor_4.target_speed = test_motor_target_4;
-            }
-            else
-            {
-#endif
 			//车坐标轴->地图坐标轴v_y、v_x、now_x、now_y
 			RobotCalculate();//麦轮正运动学解算
-#if !TEST_MODE
 			if (bt_drive_mode)
 			{
 				my_car.v_x = bt_vx;
@@ -863,70 +625,45 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
 			}
 			else
 			{
-#endif
-			//调试使用
-//			my_car.target_yaw = -90;  //旋转车身
-			car_yaw_pid();	//通过目标角度，计算出目标角速度:my_car.w，实现角度闭环pid
-			my_car.w =  -my_car.w;//调整极性
+				car_yaw_pid();
+				my_car.w =  -my_car.w;
 
-			//调试使用
-//			my_car.target_x = 100;
-//			my_car.target_y = 0;
-//地图坐标轴下X,Y值，不受到车本身转向影响
-		  PositionPID_Calculate(&my_car.position_pid_x, my_car.target_x, my_car.now_x);  //x轴闭环,计算需要的my_car.v_x
-			PositionPID_Calculate(&my_car.position_pid_y, my_car.target_y, my_car.now_y);	 //x轴闭环,计算需要的my_car.v_y
+				PositionPID_Calculate(&my_car.position_pid_x, my_car.target_x, my_car.now_x);
+				PositionPID_Calculate(&my_car.position_pid_y, my_car.target_y, my_car.now_y);
 
-			my_car.v_x = my_car.position_pid_x.Output;
-			my_car.v_y = my_car.position_pid_y.Output;
+				my_car.v_x = my_car.position_pid_x.Output;
+				my_car.v_y = my_car.position_pid_y.Output;
 
-//地图坐标轴->车坐标轴下的v_y、v_x
-			//角度校准
-			if(my_car.target_yaw == 0.0f)
-			{
-					my_car.v_y = my_car.position_pid_y.Output;
-					my_car.v_x = my_car.position_pid_x.Output;
-					
-			}
-			else if(my_car.target_yaw == 90.0f)
-			{
-					my_car.v_x = -my_car.position_pid_y.Output;
-					my_car.v_y = my_car.position_pid_x.Output;
-					
-			}
-			else if(my_car.target_yaw == -90.0f)
-			{
-					my_car.v_x = my_car.position_pid_y.Output;
-					my_car.v_y = -my_car.position_pid_x.Output;
-			}
-			else if(my_car.target_yaw == 180.0f||my_car.target_yaw == -180.0f)
-			{
+				if(my_car.target_yaw == 0.0f)
+				{
+						my_car.v_y = my_car.position_pid_y.Output;
+						my_car.v_x = my_car.position_pid_x.Output;
+				}
+				else if(my_car.target_yaw == 90.0f)
+				{
+						my_car.v_x = -my_car.position_pid_y.Output;
+						my_car.v_y = my_car.position_pid_x.Output;
+				}
+				else if(my_car.target_yaw == -90.0f)
+				{
+						my_car.v_x = my_car.position_pid_y.Output;
+						my_car.v_y = -my_car.position_pid_x.Output;
+				}
+				else if(my_car.target_yaw == 180.0f||my_car.target_yaw == -180.0f)
+				{
+						my_car.v_x = -my_car.position_pid_x.Output;
+						my_car.v_y = -my_car.position_pid_y.Output;
+				}
 
-					my_car.v_x = -my_car.position_pid_x.Output;
-					my_car.v_y = -my_car.position_pid_y.Output;
+				if(Openmv_track_start == 1)
+				{
+					PositionPID_Calculate(&my_car.openmv_pid_y, (float)opemv_middle_Y, (float)opemv_Y);
+					PositionPID_Calculate(&my_car.openmv_pid_x, (float)opemv_middle_X, (float)opemv_X);
+					my_car.v_x = my_car.openmv_pid_y.Output;
+					my_car.v_y = -my_car.openmv_pid_x.Output;
+				}
 			}
-					//openmv寻找色块调试使用
-			//Openmv_track_start = 1;,openmv,左上角是坐标原点
-			if(Openmv_track_start == 1)
-			{
-				PositionPID_Calculate(&my_car.openmv_pid_y, (float)opemv_middle_Y, (float)opemv_Y);  //x轴闭环,计算需要的my_car.v_x
-				PositionPID_Calculate(&my_car.openmv_pid_x, (float)opemv_middle_X, (float)opemv_X);	 //x轴闭环,计算需要的my_car.v_y
-			//角度校准
-				my_car.v_x = my_car.openmv_pid_y.Output;
-				my_car.v_y = -my_car.openmv_pid_x.Output;
-			}
-		
-			//调试使用
-//			my_car.v_x = 0;
-//			my_car.v_y = 0;
-//			my_car.w = 0.5;
-#if !TEST_MODE
-			}
-#endif
-			//车坐标轴下的Vx_Vy_W，计算出各个轮子的实际速度
-			mecanum(my_car.v_y, my_car.v_x, my_car.w);//麦克纳姆轮逆运动学（xy坐标系）
-#if TEST_MODE
-            }
-#endif
+			mecanum(my_car.v_y, my_car.v_x, my_car.w);
 			//调试使用
 			//Vy=正数，前面走
 //			my_car.motor_1.target_speed = 40;
@@ -1083,7 +820,7 @@ void USART3_IRQHandler(void)                	//串口3中断服务程序
 							HWT_ResCnt = 0;
 						}
 						break;
-					default:
+		default:
 						HWT_ResCnt++;
 						break;
 				}
@@ -1139,6 +876,7 @@ void UART4_IRQHandler(void)                	//串口4中断服务程序 F132X45Y
 								memset(OpenmvBuffer, '\n', OpenmvRxCnt);
 								OpenmvRxCnt = 0;
 								Openmv_flag = 0;
+								if (openmv_camera_test && openmv_drive_timer == 0) openmv_drive_timer = 10;
 								LED1 = !LED1;
 						}
 						OpenmvRxCnt++;

@@ -40,7 +40,6 @@
 ..\obj\emm_v5.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\emm_v5.o: ..\HARDWARE\gui.h
 ..\obj\emm_v5.o: ..\HARDWARE\ALL_Head.h
-..\obj\emm_v5.o: ..\HARDWARE\test.h
 ..\obj\emm_v5.o: ..\HARDWARE\Encoder.h
 ..\obj\emm_v5.o: ..\HARDWARE\usart.h
 ..\obj\emm_v5.o: ..\HARDWARE\Motor_control.h

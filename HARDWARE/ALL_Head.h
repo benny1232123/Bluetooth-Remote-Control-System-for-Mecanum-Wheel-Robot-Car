@@ -17,7 +17,7 @@
 #include "led.h"
 #include "lcd.h"
 #include "gui.h"
-#include "test.h"
+
 #include "Encoder.h"
 #include "usart.h"
 #include "Motor_control.h"

@@ -40,7 +40,6 @@
 ..\obj\button.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\button.o: ..\HARDWARE\gui.h
 ..\obj\button.o: ..\HARDWARE\ALL_Head.h
-..\obj\button.o: ..\HARDWARE\test.h
 ..\obj\button.o: ..\HARDWARE\Encoder.h
 ..\obj\button.o: ..\HARDWARE\usart.h
 ..\obj\button.o: ..\HARDWARE\Motor_control.h

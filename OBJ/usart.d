@@ -40,7 +40,6 @@
 ..\obj\usart.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 ..\obj\usart.o: ..\HARDWARE\gui.h
 ..\obj\usart.o: ..\HARDWARE\ALL_Head.h
-..\obj\usart.o: ..\HARDWARE\test.h
 ..\obj\usart.o: ..\HARDWARE\Encoder.h
 ..\obj\usart.o: ..\HARDWARE\usart.h
 ..\obj\usart.o: ..\HARDWARE\Motor_control.h
