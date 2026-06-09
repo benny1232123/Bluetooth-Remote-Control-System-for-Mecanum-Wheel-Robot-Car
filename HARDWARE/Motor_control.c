@@ -58,7 +58,7 @@ void Motor_parameter_Init(void)
 
 	/*******************openmv位置环pid*************/
 	//x轴，右手方为正方向
-	my_car.openmv_pid_x.Kp = 0.15;
+	my_car.openmv_pid_x.Kp = 0.008;
   my_car.openmv_pid_x.Ki = 0;
   my_car.openmv_pid_x.Kd = 0;
 #ifdef HAVE_PID_INTEGRAL
@@ -69,7 +69,7 @@ void Motor_parameter_Init(void)
 	my_car.openmv_pid_x.Err = 0;
   my_car.openmv_pid_x.Last_Err = 0;       // 上次误差
   my_car.openmv_pid_x.Output = 0;         // PID输出
-  my_car.openmv_pid_x.OutputMax = 5;      // 位置式PID输出限幅
+  my_car.openmv_pid_x.OutputMax = 0.8;      // 位置式PID输出限幅
 	
 	//y轴，正前方为正方向
 	my_car.openmv_pid_y.Kp = 0.15;

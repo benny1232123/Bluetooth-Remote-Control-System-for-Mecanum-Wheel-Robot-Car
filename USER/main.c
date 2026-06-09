@@ -1,5 +1,5 @@
 #include "ALL_Head.h"
-int flag_do_task = -100; //-100=空闲, -3~5=自动任务进行中
+int flag_do_task = -100; //-100=缁屾椽妫? -3~5=閼奉亜濮╂禒璇插鏉╂稖顢戞稉?
 
 #define BT_USE_UART5 1
 #define BT_HOLD_MODE 1
@@ -40,16 +40,30 @@ static volatile uint8_t openmv_grab_pending = 0;
 static volatile uint8_t openmv_camera_test = 0;
 static volatile uint8_t openmv_drive_timer = 0;
 static volatile uint8_t camera_auto_align = 0;
+static volatile uint8_t openmv_parse_flag = 0;
+static volatile uint8_t openmv_has_target = 0;
+static volatile uint8_t openmv_lost_ticks = 0;
+static volatile uint8_t openmv_align_phase = 0;      // 0=decide, 1=move, 2=wait
+static volatile uint8_t openmv_align_tick = 0;
+static volatile int8_t openmv_align_dir = 0;         // +1=vx positive, -1=vx negative
 
 #define BT_TIMEOUT_TICKS 1 // 0.1s @ 10Hz
 #define BT_HEARTBEAT_TICKS 2 // 0.2s @ 10Hz
+#define OPENMV_AUTO_START 0
+#define OPENMV_CENTER_X 320
+#define OPENMV_ALIGN_DEAD_X 20
+#define OPENMV_ALIGN_SPEED_X 80.0f
+#define OPENMV_ALIGN_KP_X 0.45f
+#define OPENMV_ALIGN_MIN_SPEED_X 35.0f
+#define OPENMV_ALIGN_MAX_SPEED_X 120.0f
+#define OPENMV_ALIGN_LOST_TICKS 20
 
 static void BT_ApplyCommand(uint8_t raw_cmd)
 {
 	if (raw_cmd == 0)
 		return;
 
-	//按下保持模式：约定小写字符表示按下(start)，对应的大写字符表示松开(stop)
+	//閹稿绗呮穱婵囧瘮濡€崇础閿涙氨瀹崇€规艾鐨崘娆忕摟缁楋箒銆冪粈鐑樺瘻娑?start)閿涘苯顕惔鏃傛畱婢堆冨晸鐎涙顑佺悰銊с仛閺夋儳绱?stop)
 	uint8_t cmd = raw_cmd;
 	uint8_t is_press = 1; // default treat as press
 	if (cmd >= 'a' && cmd <= 'z')
@@ -102,6 +116,12 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 			bt_vx = 0.0f;
 			bt_vy = 0.0f;
 			bt_w = 0.0f;
+			camera_auto_align = 0;
+			Openmv_track_start = 0;
+			openmv_has_target = 0;
+			openmv_align_phase = 0;
+			openmv_align_tick = 0;
+			openmv_align_dir = 0;
 			my_car.stop_flag = 1;
 			break;
 
@@ -261,21 +281,31 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 		case 'W': // toggle camera test mode
 			if (is_press) { openmv_camera_test = !openmv_camera_test; bt_drive_mode = 1; }
 			break;
-		case 'H': // toggle camera auto-tracking (car moves to center target)
+		case 'H': // lower-case h starts OpenMV auto center alignment
 			if (is_press)
 			{
-				camera_auto_align = !camera_auto_align;
-				if (camera_auto_align)
-				{
-					Openmv_track_start = 1;
-					bt_drive_mode = 0;
-					bt_vx = 0.0f; bt_vy = 0.0f; bt_w = 0.0f; my_car.stop_flag = 1;
-				}
-				else
-				{
-					Openmv_track_start = 0;
-					bt_drive_mode = 1;
-				}
+				Openmv_track_start = 1;
+				camera_auto_align = 1;
+				openmv_parse_flag = 0;
+				openmv_has_target = 0;
+				openmv_lost_ticks = 0;
+
+				openmv_align_phase = 0;
+				openmv_align_tick = 0;
+				openmv_align_dir = 0;
+
+				bt_drive_mode = 0;
+
+				bt_vx = 0.0f;
+				bt_vy = 0.0f;
+				bt_w  = 0.0f;
+
+				my_car.v_x = 0.0f;
+				my_car.v_y = 0.0f;
+				my_car.w   = 0.0f;
+				my_car.stop_flag = 0;
+
+				uart_write_string(UART5, (uint8_t *)"\r\nALIGN START\r\n");
 			}
 			break;
 		default:
@@ -286,41 +316,41 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 
 int main(void)
 {	
-	SystemInit();//初始化RCC 设置系统主频为72MHZ
-	delay_init();	     //延时初始化
+	SystemInit();//閸掓繂顫愰崠鏈C 鐠佸墽鐤嗙化鑽ょ埠娑撳顣舵稉?2MHZ
+	delay_init();	     //瀵よ埖妞傞崚婵嗩潗閸?
 	LED_Init();
 	Encoder_Init();
 	#if !BT_USE_UART5
 	uart1_init(9600); // HC-05/06 default, adjust if needed
 	#endif
 	uart2_init(115200);
-	uart3_init(9600);//TX:GPIOB.10;  RX:GPIOB.11初始化,陀螺仪
-	uart4_init(115200);//TX:GPIOC.10;   RX:GPIOC.11初始化 openmv
+	uart3_init(9600);//TX:GPIOB.10;  RX:GPIOB.11閸掓繂顫愰崠?闂勨偓閾昏桨鍗?
+	uart4_init(115200);//TX:GPIOC.10;   RX:GPIOC.11閸掓繂顫愰崠?openmv
 	uart5_init(9600); // UART5: PC12(TX), PD2(RX)
 	Motor_Init();
 	Servo_Init();
 	
-	LCD_Init();	   //液晶屏初始化
+	LCD_Init();	   //濞戝弶娅犵仦蹇撳灥婵瀵?
 	Button_Control_init();
-	HWT_Init();//陀螺仪初始化
+	HWT_Init();//闂勨偓閾昏桨鍗庨崚婵嗩潗閸?
 
 
-	Motor_parameter_Init();//电机参数初始化
+	Motor_parameter_Init();//閻㈠灚婧€閸欏倹鏆熼崚婵嗩潗閸?
 	
 	Emm_V5_En_Control(USART2, 1, 1, 0);uart2_str_T_count = 4;
-	delay_ms(500);                     //延时ms
+	delay_ms(500);                     //瀵よ埖妞俶s
 
-//设置回零参数
+//鐠佸墽鐤嗛崶鐐烘祩閸欏倹鏆?
 //  Emm_V5_Origin_Modify_Params(USART2, 1, true, 2, 1, 100, 3500, 300, 1000, 60, false);
-//	delay_ms(1000);                     //延时ms
+//	delay_ms(1000);                     //瀵よ埖妞俶s
 
 //	Emm_V5_Origin_Trigger_Return(USART2, 1, 2, false);uart2_str_T_count = 10;
-//	delay_ms(500);                     //延时ms
+//	delay_ms(500);                     //瀵よ埖妞俶s
 
   Timer6_Init();
-	delay_ms(7);                     //延时ms
+	delay_ms(7);                     //瀵よ埖妞俶s
 	Timer7_Init();
-	delay_ms(1000);                     //延时ms
+	delay_ms(1000);                     //瀵よ埖妞俶s
 
 	while(1)
 	{
@@ -329,85 +359,85 @@ int main(void)
     unsigned int d = 16;
 		
 
-		sprintf(txt, "V_FL:%d ,%f  ",Encoder_FL, my_car.motor_2.speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "V_FL:%d ,%f  ",Encoder_FL, my_car.motor_2.speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "TFL_V:%f  ",my_car.motor_2.target_speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "TFL_V:%f  ",my_car.motor_2.target_speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "V_FR:%d ,%f  ",Encoder_FR, my_car.motor_1.speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "V_FR:%d ,%f  ",Encoder_FR, my_car.motor_1.speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "TFR_V:%f  ",my_car.motor_1.target_speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "TFR_V:%f  ",my_car.motor_1.target_speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "V_BR:%d ,%f  ",Encoder_BR, my_car.motor_4.speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "V_BR:%d ,%f  ",Encoder_BR, my_car.motor_4.speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "TBR_V:%f  ",my_car.motor_4.target_speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "TBR_V:%f  ",my_car.motor_4.target_speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "V_BL:%d ,%f  ",Encoder_BL, my_car.motor_3.speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "V_BL:%d ,%f  ",Encoder_BL, my_car.motor_3.speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "TBL_V:%f  ",my_car.motor_3.target_speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "TBL_V:%f  ",my_car.motor_3.target_speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "YAW:%f   ",YAW);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "YAW:%f   ",YAW);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "T:%f   ",my_car.target_yaw);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "T:%f   ",my_car.target_yaw);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(120,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "v_x:%f   ",my_car.now_v_x);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "v_x:%f   ",my_car.now_v_x);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "T:%f   ",my_car.v_x);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "T:%f   ",my_car.v_x);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(120,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "v_y:%f   ",my_car.now_v_y);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "v_y:%f   ",my_car.now_v_y);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "T:%f ",my_car.v_y);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "T:%f ",my_car.v_y);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(120,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "now_x:%f  ",my_car.now_x);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "now_x:%f  ",my_car.now_x);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "T:%.2f ",my_car.target_x);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "T:%.2f ",my_car.target_x);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(150,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "now_y:%f   ",my_car.now_y);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "now_y:%f   ",my_car.now_y);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "T:%.2f ",my_car.target_y);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "T:%.2f ",my_car.target_y);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(150,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "v_w:%f   ",my_car.w);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "v_w:%f   ",my_car.w);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
-		sprintf(txt, "QR_code:%d, %d%d%d%d%d%d   ",QR_codeRx_Date,QR_codeRx_Date/100000,(QR_codeRx_Date/10000)%10,(QR_codeRx_Date/1000)%10,(QR_codeRx_Date/100)%10,(QR_codeRx_Date/10)%10,QR_codeRx_Date%10);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "QR_code:%d, %d%d%d%d%d%d   ",QR_codeRx_Date,QR_codeRx_Date/100000,(QR_codeRx_Date/10000)%10,(QR_codeRx_Date/1000)%10,(QR_codeRx_Date/100)%10,(QR_codeRx_Date/10)%10,QR_codeRx_Date%10);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 	 
 		k+=d;
-		sprintf(txt, "mv:%c ",Openmv_flag);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "mv:%c ",Openmv_flag);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "X:%d  ",opemv_X);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "X:%d  ",opemv_X);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(50,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "Y:%d  ",opemv_Y);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "Y:%d  ",opemv_Y);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(120,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		
 		k+=d;
-		sprintf(txt, "task:%d ",flag_do_task);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "task:%d ",flag_do_task);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		sprintf(txt, "align:%d ",camera_auto_align);
 		Show_Str(80,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		
 		k+=d;
-		sprintf(txt, "u1:%c ",uart1_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "u1:%c ",uart1_Res);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "u2:%c ",uart2_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "u2:%c ",uart2_Res);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2+5*8,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "u3:%c ",uart3_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "u3:%c ",uart3_Res);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2+5*8+5*8,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "u4:%c ",uart4_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "u4:%c ",uart4_Res);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2+5*8+5*8+5*8,k,BLUE,YELLOW,(u8 *) txt,16,0);
-		sprintf(txt, "u5:%c ",uart5_Res);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+		sprintf(txt, "u5:%c ",uart5_Res);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 		Show_Str(2+5*8+5*8+5*8+5*8,k,BLUE,YELLOW,(u8 *) txt,16,0);
 		k+=d;
 
@@ -416,22 +446,22 @@ int main(void)
 				k+=d;
 				Show_Str(2,k,BLUE,YELLOW,(u8 *)"key1_flag",16,0);
 
-//				sprintf(txt, "clip:%d  ",Servo_clip_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "clip:%d  ",Servo_clip_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_clip_duty ++;
 				
-//				sprintf(txt, "turntable:%d  ",Servo_turntable_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "turntable:%d  ",Servo_turntable_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_turntable_duty ++;
 				
-//				sprintf(txt, "platform:%d  ",Servo_platform_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "platform:%d  ",Servo_platform_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_platform_duty ++;
 //				Servo_turntable_duty ++;
 				
-				HWT_Init();//陀螺仪初始化
-				Motor_parameter_Init();//电机参数初始化
-				my_car.stop_flag = 0; //停车标志位
+				HWT_Init();//闂勨偓閾昏桨鍗庨崚婵嗩潗閸?
+				Motor_parameter_Init();//閻㈠灚婧€閸欏倹鏆熼崚婵嗩潗閸?
+				my_car.stop_flag = 0; //閸嬫粏婧呴弽鍥х箶娴?
 
 				key1_flag = 0;
 			}
@@ -439,42 +469,42 @@ int main(void)
 			{
 				k+=d;
 				Show_Str(2,k,BLUE,YELLOW,(u8 *)"key2_flag",16,0);
-//				sprintf(txt, "clip:%d  ",Servo_clip_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "clip:%d  ",Servo_clip_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_clip_duty --;
 
-//				sprintf(txt, "turntable:%d  ",Servo_turntable_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "turntable:%d  ",Servo_turntable_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_turntable_duty --;
 //				
-//				sprintf(txt, "platform:%d  ",Servo_platform_duty);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
+//				sprintf(txt, "platform:%d  ",Servo_platform_duty);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
 //				Show_Str(2,k,BLUE,YELLOW,(u8 *) txt,16,0);
 //				Servo_platform_duty --;
 //				Servo_turntable_duty --;
 				
-				my_car.stop_flag =!my_car.stop_flag;//停车标志位翻转，控制车辆启停
-//							Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 9000, false, false); //抬起爪子，目前位置1000
-//					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 10000, false, false); //放下爪子，目前位置10000
+				my_car.stop_flag =!my_car.stop_flag;//閸嬫粏婧呴弽鍥х箶娴ｅ秶鐐曟潪顒婄礉閹貉冨煑鏉烇箒绶犻崥顖氫粻
+//							Emm_V5_Pos_Control(USART2, 1, 8, 500, 0, 9000, false, false); //閹额剝鎹ｉ悥顏勭摍閿涘瞼娲伴崜宥勭秴缂?000
+//					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 10000, false, false); //閺€鍙ョ瑓閻栴亜鐡欓敍宀€娲伴崜宥勭秴缂?0000
 
 				key2_flag = 0;
 			}
 
 
 		LED1=!LED1;
-		delay_ms(1);                     //延时300ms
+		delay_ms(1);                     //瀵よ埖妞?00ms
 			
 			
 	}
 }
 
 
-void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
+void TIM7_IRQHandler(void)//10Hz,閿?.1s=100ms
 {
-	if (TIM_GetITStatus(TIM7, TIM_IT_Update) == SET)//检查TIM7更新中断发生置位
+	if (TIM_GetITStatus(TIM7, TIM_IT_Update) == SET)//濡偓閺岊櫄IM7閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 	{
 				
 
-				Timer7_count ++;//用于计时
+				Timer7_count ++;//閻劋绨拋鈩冩
 
 						if ((Timer7_count - bt_last_tx_tick) >= BT_HEARTBEAT_TICKS)
 						{
@@ -485,7 +515,7 @@ void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
 							#endif
 							bt_last_tx_tick = Timer7_count;
 						}
-						if ((Timer7_count - bt_last_rx_tick) > BT_TIMEOUT_TICKS)
+						if (Openmv_track_start == 0 && (Timer7_count - bt_last_rx_tick) > BT_TIMEOUT_TICKS)
 						{
 							bt_vx = 0.0f;
 							bt_vy = 0.0f;
@@ -572,51 +602,51 @@ void TIM7_IRQHandler(void)//10Hz,，0.1s=100ms
 
 				LED3=!LED3;
 
-		TIM_ClearITPendingBit(TIM7, TIM_IT_Update);//清除TIMx更新中断标志
+		TIM_ClearITPendingBit(TIM7, TIM_IT_Update);//濞撳懘娅嶵IMx閺囧瓨鏌婃稉顓熸焽閺嶅洤绻?
 	}
 }
 
-void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
+void TIM6_IRQHandler(void)//50Hz閿?.020s=2ms娑擃厽鏌?
 {
-	if (TIM_GetITStatus(TIM6, TIM_IT_Update) == SET)//检查TIM6更新中断发生置位
+	if (TIM_GetITStatus(TIM6, TIM_IT_Update) == SET)//濡偓閺岊櫄IM6閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 	{
-			Encoder_FR =  +(int16_t)TIM_GetCounter(TIM4); //右前轮子，motor_1
-			Encoder_FL =  -(int16_t)TIM_GetCounter(TIM5); //左前轮子，motor_2
-			Encoder_BR =  +(int16_t)TIM_GetCounter(TIM2); //右后轮子，motor_4
-			Encoder_BL =  +(int16_t)TIM_GetCounter(TIM3); //左后轮子，motor_3
-					//调试使用
-//			my_car.yaw = -90;  //当前角度赋值
+			Encoder_FR =  +(int16_t)TIM_GetCounter(TIM4); //閸欏啿澧犳潪顔肩摍閿涘otor_1
+			Encoder_FL =  -(int16_t)TIM_GetCounter(TIM5); //瀹革箑澧犳潪顔肩摍閿涘otor_2
+			Encoder_BR =  +(int16_t)TIM_GetCounter(TIM2); //閸欏啿鎮楁潪顔肩摍閿涘otor_4
+			Encoder_BL =  +(int16_t)TIM_GetCounter(TIM3); //瀹革箑鎮楁潪顔肩摍閿涘otor_3
+					//鐠嬪啳鐦担璺ㄦ暏
+//			my_car.yaw = -90;  //瑜版挸澧犵憴鎺戝鐠у鈧?
 //			YAW = -90;
-//			my_car.target_yaw = -90;  //旋转车身
-//			Encoder_FR =  40; //右前轮子，motor_1
-//			Encoder_FL =  40; //左前轮子，motor_2
-//			Encoder_BR =  40; //右后轮子，motor_4
-//			Encoder_BL =  40; //左后轮子，motor_3
+//			my_car.target_yaw = -90;  //閺冨娴嗘潪锕侀煩
+//			Encoder_FR =  40; //閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			Encoder_FL =  40; //瀹革箑澧犳潪顔肩摍閿涘otor_2
+//			Encoder_BR =  40; //閸欏啿鎮楁潪顔肩摍閿涘otor_4
+//			Encoder_BL =  40; //瀹革箑鎮楁潪顔肩摍閿涘otor_3
 		
-//			Encoder_FR =  -40; //右前轮子，motor_1
-//			Encoder_FL =  40; //左前轮子，motor_2
-//			Encoder_BR =  40; //右后轮子，motor_4
-//			Encoder_BL =  -40; //左后轮子，motor_3
+//			Encoder_FR =  -40; //閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			Encoder_FL =  40; //瀹革箑澧犳潪顔肩摍閿涘otor_2
+//			Encoder_BR =  40; //閸欏啿鎮楁潪顔肩摍閿涘otor_4
+//			Encoder_BL =  -40; //瀹革箑鎮楁潪顔肩摍閿涘otor_3
 
 			TIM_SetCounter(TIM2, 0);
 			TIM_SetCounter(TIM3, 0);
 			TIM_SetCounter(TIM4, 0);
 			TIM_SetCounter(TIM5, 0);
 		
-		//四个电机的开环控制，确定占空比
-		//实现四个电机的闭环控制:速度单位转换cm/s，输入是PID参数、目标速度、当前速度 -》输出是占空比
-		//麦克纳姆轮逆运动学（xy坐标系）函数测试,输入是vx\vy\vw-》输出是目标速度
-		//麦轮正运动学解算，函数测试，now_VY=正、now_Vx=0
-		//x轴位置环：输入当前位置、目标位置、PID参数，输出是什么：Vx
-		//y轴位置环：输入当前位置、目标位置、PID参数，输出是什么：Vy
-		//角度闭环：输入当前角度、目标角度、PID参数，输出是什么：Vw
+		//閸ユ稐閲滈悽鍨簚閻ㄥ嫬绱戦悳顖涘付閸掕绱濈涵顔肩暰閸楃姷鈹栧В?
+		//鐎圭偟骞囬崶娑楅嚋閻㈠灚婧€閻ㄥ嫰妫撮悳顖涘付閸?闁喎瀹抽崡鏇氱秴鏉烆剚宕瞔m/s閿涘矁绶崗銉︽ЦPID閸欏倹鏆熼妴浣烘窗閺嶅洭鈧喎瀹抽妴浣哥秼閸撳秹鈧喎瀹?-閵嗗绶崙鐑樻Ц閸楃姷鈹栧В?
+		//妤癸箑鍘犵痪鍐差潒鏉烆噣鈧棜绻嶉崝銊ヮ劅閿涘澑y閸ф劖鐖ｇ化浼欑礆閸戣姤鏆熷ù瀣槸,鏉堟挸鍙嗛弰鐥竫\vy\vw-閵嗗绶崙鐑樻Ц閻╊喗鐖ｉ柅鐔峰
+		//妤癸箒鐤嗗锝堢箥閸斻劌顒熺憴锝囩暬閿涘苯鍤遍弫鐗堢ゴ鐠囨洩绱漬ow_VY=濮濓絻鈧苟ow_Vx=0
+		//x鏉炵繝缍呯純顔惧箚閿涙俺绶崗銉ョ秼閸撳秳缍呯純顔衡偓浣烘窗閺嶅洣缍呯純顔衡偓涓矷D閸欏倹鏆熼敍宀冪翻閸戠儤妲告禒鈧稊鍫窗Vx
+		//y鏉炵繝缍呯純顔惧箚閿涙俺绶崗銉ョ秼閸撳秳缍呯純顔衡偓浣烘窗閺嶅洣缍呯純顔衡偓涓矷D閸欏倹鏆熼敍宀冪翻閸戠儤妲告禒鈧稊鍫窗Vy
+		//鐟欐帒瀹抽梻顓犲箚閿涙俺绶崗銉ョ秼閸撳秷顫楁惔锔衡偓浣烘窗閺嶅洩顫楁惔锔衡偓涓矷D閸欏倹鏆熼敍宀冪翻閸戠儤妲告禒鈧稊鍫窗Vw
 		
-			encoder_count_get();//获取编码器的值
+			encoder_count_get();//閼惧嘲褰囩紓鏍垳閸ｃ劎娈戦崐?
 			
-			speed_translation(&my_car.motor_1);speed_translation(&my_car.motor_2);speed_translation(&my_car.motor_3);speed_translation(&my_car.motor_4);//计算轮速
+			speed_translation(&my_car.motor_1);speed_translation(&my_car.motor_2);speed_translation(&my_car.motor_3);speed_translation(&my_car.motor_4);//鐠侊紕鐣绘潪顕€鈧?
 
-			//车坐标轴->地图坐标轴v_y、v_x、now_x、now_y
-			RobotCalculate();//麦轮正运动学解算
+			//鏉烇箑娼楅弽鍥叡->閸︽澘娴橀崸鎰垼鏉炵_y閵嗕箍_x閵嗕苟ow_x閵嗕苟ow_y
+			RobotCalculate();//妤癸箒鐤嗗锝堢箥閸斻劌顒熺憴锝囩暬
 			if (bt_drive_mode)
 			{
 				my_car.v_x = bt_vx;
@@ -655,38 +685,115 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
 						my_car.v_y = -my_car.position_pid_y.Output;
 				}
 
-				if(Openmv_track_start == 1)
+				if (Openmv_track_start == 1)
 				{
-					PositionPID_Calculate(&my_car.openmv_pid_y, (float)opemv_middle_Y, (float)opemv_Y);
-					PositionPID_Calculate(&my_car.openmv_pid_x, (float)opemv_middle_X, (float)opemv_X);
-					my_car.v_x = my_car.openmv_pid_y.Output;
-					my_car.v_y = -my_car.openmv_pid_x.Output;
+					int openmv_err_x = opemv_X - OPENMV_CENTER_X;
+
+					/* Continuous lateral alignment:
+					 * error_x > 0: target is on the right side of image, so v_x is positive.
+					 * error_x < 0: target is on the left side of image, so v_x is negative.
+					 * The farther from center, the faster the car translates.
+					 */
+					if (openmv_has_target)
+					{
+						float align_vx;
+						openmv_lost_ticks = 0;
+
+						if (openmv_err_x <= OPENMV_ALIGN_DEAD_X && openmv_err_x >= -OPENMV_ALIGN_DEAD_X)
+						{
+							my_car.v_x = 0.0f;
+							my_car.v_y = 0.0f;
+							my_car.w = 0.0f;
+							my_car.stop_flag = 1;
+
+							Openmv_track_start = 0;
+							camera_auto_align = 0;
+							bt_drive_mode = 1;
+
+							openmv_align_phase = 0;
+							openmv_align_tick = 0;
+							openmv_align_dir = 0;
+
+							uart_write_string(UART5, (uint8_t *)"ALIGN OK\r\n");
+						}
+						else
+						{
+							align_vx = (float)openmv_err_x * OPENMV_ALIGN_KP_X;
+
+							if (align_vx > OPENMV_ALIGN_MAX_SPEED_X)
+							{
+								align_vx = OPENMV_ALIGN_MAX_SPEED_X;
+							}
+							else if (align_vx < -OPENMV_ALIGN_MAX_SPEED_X)
+							{
+								align_vx = -OPENMV_ALIGN_MAX_SPEED_X;
+							}
+
+							if (align_vx > 0.0f && align_vx < OPENMV_ALIGN_MIN_SPEED_X)
+							{
+								align_vx = OPENMV_ALIGN_MIN_SPEED_X;
+							}
+							else if (align_vx < 0.0f && align_vx > -OPENMV_ALIGN_MIN_SPEED_X)
+							{
+								align_vx = -OPENMV_ALIGN_MIN_SPEED_X;
+							}
+
+							my_car.v_x = align_vx;
+							my_car.v_y = 0.0f;
+							my_car.w = 0.0f;
+							my_car.stop_flag = 0;
+						}
+					}
+					else
+					{
+						if (openmv_lost_ticks < OPENMV_ALIGN_LOST_TICKS)
+						{
+							openmv_lost_ticks++;
+						}
+
+						my_car.v_x = 0.0f;
+						my_car.v_y = 0.0f;
+						my_car.w = 0.0f;
+						my_car.stop_flag = 1;
+
+						openmv_align_phase = 0;
+						openmv_align_tick = 0;
+						openmv_align_dir = 0;
+
+						if (openmv_lost_ticks >= OPENMV_ALIGN_LOST_TICKS)
+						{
+							Openmv_track_start = 0;
+							camera_auto_align = 0;
+							bt_drive_mode = 1;
+							uart_write_string(UART5, (uint8_t *)"ALIGN LOST\r\n");
+						}
+					}
 				}
 			}
 			mecanum(my_car.v_y, my_car.v_x, my_car.w);
-			//调试使用
-			//Vy=正数，前面走
+			//鐠嬪啳鐦担璺ㄦ暏
+			//Vy=濮濓絾鏆熼敍灞藉闂堛垼铔?
 //			my_car.motor_1.target_speed = 40;
 //			my_car.motor_2.target_speed = 40;
 //			my_car.motor_3.target_speed = 40;
 //			my_car.motor_4.target_speed = 40;
-				//VX=正数，右边走
-//			my_car.motor_1.target_speed = -40;//右前轮子，motor_1
-//			my_car.motor_2.target_speed = 40;//左前轮子，motor_2
-//			my_car.motor_3.target_speed = -40;//左后轮子，motor_3
-//			my_car.motor_4.target_speed = 40;//右后轮子，motor_4
-				//W=正数，顺时针转
-//			my_car.motor_1.target_speed = 40;//右前轮子，motor_1
-//			my_car.motor_2.target_speed = 40;//左前轮子，motor_2
-//			my_car.motor_3.target_speed = -40;//左后轮子，motor_3
-//			my_car.motor_4.target_speed = -40;//右后轮子，motor_4
+				//VX=濮濓絾鏆熼敍灞藉礁鏉堢铔?
+//			my_car.motor_1.target_speed = -40;//閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			my_car.motor_2.target_speed = 40;//瀹革箑澧犳潪顔肩摍閿涘otor_2
+//			my_car.motor_3.target_speed = -40;//瀹革箑鎮楁潪顔肩摍閿涘otor_3
+//			my_car.motor_4.target_speed = 40;//閸欏啿鎮楁潪顔肩摍閿涘otor_4
+				//W=濮濓絾鏆熼敍宀勩€庨弮鍫曟嫛鏉?
+//			my_car.motor_1.target_speed = 40;//閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			my_car.motor_2.target_speed = 40;//瀹革箑澧犳潪顔肩摍閿涘otor_2
+//			my_car.motor_3.target_speed = -40;//瀹革箑鎮楁潪顔肩摍閿涘otor_3
+//			my_car.motor_4.target_speed = -40;//閸欏啿鎮楁潪顔肩摍閿涘otor_4
 			IncrementalPID_Calculate(&my_car.motor_1.s_pid, my_car.motor_1.target_speed, my_car.motor_1.speed);
 			IncrementalPID_Calculate(&my_car.motor_2.s_pid, my_car.motor_2.target_speed, my_car.motor_2.speed);
 			IncrementalPID_Calculate(&my_car.motor_3.s_pid, my_car.motor_3.target_speed, my_car.motor_3.speed);
 			IncrementalPID_Calculate(&my_car.motor_4.s_pid, my_car.motor_4.target_speed, my_car.motor_4.speed);
 
 
-			if(my_car.stop_flag == 1)   //停车处理
+			if(my_car.stop_flag == 1)   //閸嬫粏婧呮径鍕倞
 				{
 						my_car.motor_1.s_pid.Output = 0;
 						my_car.motor_2.s_pid.Output = 0;
@@ -694,13 +801,16 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
 						my_car.motor_4.s_pid.Output = 0;
 				}
 				
-			if(Openmv_flag == 'Q' && Openmv_track_start == 1)//openmv循迹开启了，但接受到'Q'是没有识别到，则不进行移动
-			{
-					my_car.motor_1.s_pid.Output = 0;
-					my_car.motor_2.s_pid.Output = 0;
-					my_car.motor_3.s_pid.Output = 0;
-					my_car.motor_4.s_pid.Output = 0;
-			}
+			/* 鐠嬪啳鐦梼鑸殿唽閸忓牅绗夌憰浣告礈娑?OpenMV 閸?Q 鐏忓崬宸遍崚鑸电闂嗗墎鏁搁張鎭掆偓?
+			 * 閸氾箑鍨幗鍕剼婢舵潙浼撶亸鏂炬丢鐢勬閿涘苯鐨潪锔跨窗娑撯偓閻╃顫﹂崑婊嗘簠闁槒绶幍鎾存焽閵?
+			 */
+//			if(Openmv_flag == 'Q' && Openmv_track_start == 1)
+//			{
+//					my_car.motor_1.s_pid.Output = 0;
+//					my_car.motor_2.s_pid.Output = 0;
+//					my_car.motor_3.s_pid.Output = 0;
+//					my_car.motor_4.s_pid.Output = 0;
+//			}
 				
 		  my_car.motor_2.s_pid.Output = constrain_float(my_car.motor_2.s_pid.Output, -motorFL_MAX, motorFL_MAX);
 			my_car.motor_1.s_pid.Output = constrain_float(my_car.motor_1.s_pid.Output, -motorFR_MAX, motorFR_MAX);
@@ -712,21 +822,21 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
 			my_car.motor_3.PWM = my_car.motor_3.s_pid.Output;
 			my_car.motor_4.PWM = my_car.motor_4.s_pid.Output;			
 			
-			//调试使用   Y正，往左走
-//			my_car.motor_2.PWM = 2000;//左前轮子，motor_2
-// 		  my_car.motor_1.PWM = 2000;//右前轮子，motor_1
-//			my_car.motor_3.PWM = 2000;//左后轮子，motor_3
-//			my_car.motor_4.PWM = 2000;//右后轮子，motor_4
-			//旋转车身
-//			my_car.motor_2.PWM = 2100;//左前轮子，motor_2
-// 		  my_car.motor_1.PWM = 2100;//右前轮子，motor_1
-//			my_car.motor_3.PWM = -2100;//左后轮子，motor_3
-//			my_car.motor_4.PWM = -2100;//右后轮子，motor_4
-			//X正，往前面走
-//			my_car.motor_2.PWM = 2100;//左前轮子，motor_2
-// 		  my_car.motor_1.PWM = -2100;//右前轮子，motor_1
-//			my_car.motor_3.PWM = -2100;//左后轮子，motor_3
-//			my_car.motor_4.PWM = 2100;//右后轮子，motor_4
+			//鐠嬪啳鐦担璺ㄦ暏   Y濮濓綇绱濆鈧锕佽泲
+//			my_car.motor_2.PWM = 2000;//瀹革箑澧犳潪顔肩摍閿涘otor_2
+// 		  my_car.motor_1.PWM = 2000;//閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			my_car.motor_3.PWM = 2000;//瀹革箑鎮楁潪顔肩摍閿涘otor_3
+//			my_car.motor_4.PWM = 2000;//閸欏啿鎮楁潪顔肩摍閿涘otor_4
+			//閺冨娴嗘潪锕侀煩
+//			my_car.motor_2.PWM = 2100;//瀹革箑澧犳潪顔肩摍閿涘otor_2
+// 		  my_car.motor_1.PWM = 2100;//閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			my_car.motor_3.PWM = -2100;//瀹革箑鎮楁潪顔肩摍閿涘otor_3
+//			my_car.motor_4.PWM = -2100;//閸欏啿鎮楁潪顔肩摍閿涘otor_4
+			//X濮濓綇绱濆鈧崜宥夋桨鐠?
+//			my_car.motor_2.PWM = 2100;//瀹革箑澧犳潪顔肩摍閿涘otor_2
+// 		  my_car.motor_1.PWM = -2100;//閸欏啿澧犳潪顔肩摍閿涘otor_1
+//			my_car.motor_3.PWM = -2100;//瀹革箑鎮楁潪顔肩摍閿涘otor_3
+//			my_car.motor_4.PWM = 2100;//閸欏啿鎮楁潪顔肩摍閿涘otor_4
 
 			my_car.motor_2.PWM = constrain_float(my_car.motor_2.PWM, -motorFL_MAX, motorFL_MAX);
 			my_car.motor_1.PWM = constrain_float(my_car.motor_1.PWM, -motorFR_MAX, motorFR_MAX);
@@ -740,24 +850,24 @@ void TIM6_IRQHandler(void)//50Hz，0.020s=2ms中断
       mortor_TB6612Set(motorBR_PWM, motorBR_IN1, motorBR_IN2, (int32_t)my_car.motor_4.PWM, motorBR_MAX, motorBR_Die);
 
 //			char txt[32];
-//			sprintf(txt, "V:%f\n",my_car.motor_1.speed);                    //将变量填充到字符串的对应位置，并将字符串存放到txt[]中
-//			uart_write_string(UART5, (uint8_t*)txt);//向串口发送数据
+//			sprintf(txt, "V:%f\n",my_car.motor_1.speed);                    //鐏忓棗褰夐柌蹇擄綖閸忓懎鍩岀€涙顑佹稉鑼畱鐎电懓绨叉担宥囩枂閿涘苯鑻熺亸鍡楃摟缁楋缚瑕嗙€涙ɑ鏂侀崚鐨寈t[]娑?
+//			uart_write_string(UART5, (uint8_t*)txt);//閸氭垳瑕嗛崣锝呭絺闁焦鏆熼幑?
 			
-			Servo_clip_SetAngle(Servo_clip_duty);		//夹子舵机赋值
-			Servo_turntable_SetAngle(Servo_turntable_duty);  //转盘舵机赋值
-			Servo_platform_SetAngle(Servo_platform_duty);//装物料的平台舵机
+			Servo_clip_SetAngle(Servo_clip_duty);		//婢剁懓鐡欓懜鍨簚鐠у鈧?
+			Servo_turntable_SetAngle(Servo_turntable_duty);  //鏉烆剛娲忛懜鍨簚鐠у鈧?
+			Servo_platform_SetAngle(Servo_platform_duty);//鐟佸懐澧块弬娆戞畱楠炲啿褰撮懜鍨簚
 			Button_Control_scan();
 		LED2=!LED2;
-		TIM_ClearITPendingBit(TIM6, TIM_IT_Update);//清除TIMx更新中断标志 
+		TIM_ClearITPendingBit(TIM6, TIM_IT_Update);//濞撳懘娅嶵IMx閺囧瓨鏌婃稉顓熸焽閺嶅洤绻?
 	}
 }
 		
-void USART1_IRQHandler(void)                	//串口1中断服务程序
+void USART1_IRQHandler(void)                	//娑撴彃褰?娑擃厽鏌囬張宥呭缁嬪绨?
 	{
 
-	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)  //检查TIM7更新中断发生置位
+	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)  //濡偓閺岊櫄IM7閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 		{
-		   uart1_Res = USART_ReceiveData(USART1);	//读取接收到的数据
+		   uart1_Res = USART_ReceiveData(USART1);	//鐠囪褰囬幒銉︽暪閸掓壆娈戦弫鐗堝祦
 			#if !BT_USE_UART5
 			bt_cmd = uart1_Res;
 			bt_last_rx_tick = Timer7_count;
@@ -766,15 +876,15 @@ void USART1_IRQHandler(void)                	//串口1中断服务程序
 			USART_SendData(USART1, uart1_Res);
 			#endif
 				
-  		 USART_ClearITPendingBit(USART1, USART_IT_RXNE);//清除TIMx更新中断标志 
+  		 USART_ClearITPendingBit(USART1, USART_IT_RXNE);//濞撳懘娅嶵IMx閺囧瓨鏌婃稉顓熸焽閺嶅洤绻?
      } 
 } 
-void USART2_IRQHandler(void)                	//串口2中断服务程序
+void USART2_IRQHandler(void)                	//娑撴彃褰?娑擃厽鏌囬張宥呭缁嬪绨?
 	{
 
-	if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)  //检查TIM7更新中断发生置位
+	if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)  //濡偓閺岊櫄IM7閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 		{
-		   uart2_Res = USART_ReceiveData(USART2);	//读取接收到的数据
+		   uart2_Res = USART_ReceiveData(USART2);	//鐠囪褰囬幒銉︽暪閸掓壆娈戦弫鐗堝祦
 				uart2_str[uart2_str_count] = uart2_Res;
 				if(uart2_str_count == uart2_str_T_count)
 					{
@@ -790,15 +900,15 @@ void USART2_IRQHandler(void)                	//串口2中断服务程序
 } 
 unsigned char Cmd_GetPkt(unsigned char byte);
 
-//注意：右边为0°~-180°，左边为180°~0°
-uint8_t HWT_ResBuffer[22] = {0};  //陀螺仪储存数组
+//濞夈劍鍓伴敍姘礁鏉堥€涜礋0鎺硚-180鎺抽敍灞戒箯鏉堥€涜礋180鎺硚0鎺?
+uint8_t HWT_ResBuffer[22] = {0};  //闂勨偓閾昏桨鍗庨崒銊ョ摠閺佹壆绮?
 unsigned char HWT_ResCnt = 0;
-void USART3_IRQHandler(void)                	//串口3中断服务程序
+void USART3_IRQHandler(void)                	//娑撴彃褰?娑擃厽鏌囬張宥呭缁嬪绨?
 	{
 
-	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)  //检查TIM7更新中断发生置位
+	if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)  //濡偓閺岊櫄IM7閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 		{
-		   uart3_Res = USART_ReceiveData(USART3);	//读取接收到的数据			
+		   uart3_Res = USART_ReceiveData(USART3);	//鐠囪褰囬幒銉︽暪閸掓壆娈戦弫鐗堝祦			
 		HWT_ResBuffer[HWT_ResCnt] = uart3_Res;
 			short yaw;	
 		  short w;
@@ -829,7 +939,7 @@ void USART3_IRQHandler(void)                	//串口3中断服务程序
 						yaw = (short)((((short)HWT_ResBuffer[18]) << 8) | HWT_ResBuffer[17]);
 						YAW = (float)yaw / 32768 * 180;
 						
-						my_car.yaw = YAW;  //当前角度赋值
+						my_car.yaw = YAW;  //瑜版挸澧犵憴鎺戝鐠у鈧?
 
 
 						w = (short)((((short)HWT_ResBuffer[7]) << 8) | HWT_ResBuffer[6]);
@@ -837,57 +947,107 @@ void USART3_IRQHandler(void)                	//串口3中断服务程序
 					
 					HWT_ResCnt = 0;
 				}
-  		 USART_ClearITPendingBit(USART3, USART_IT_RXNE);//清除TIMx更新中断标志 
+  		 USART_ClearITPendingBit(USART3, USART_IT_RXNE);//濞撳懘娅嶵IMx閺囧瓨鏌婃稉顓熸焽閺嶅洤绻?
 
      } 
 
 } 
 
-void UART4_IRQHandler(void)                	//串口4中断服务程序 F132X45Y
+void UART4_IRQHandler(void)
 {
+    if (USART_GetITStatus(UART4, USART_IT_RXNE) == SET)
+    {
+        uart4_Res = USART_ReceiveData(UART4);
 
-  if (USART_GetITStatus(UART4, USART_IT_RXNE) == SET)//检查TIM7更新中断发生置位
-	{
-			
-			uart4_Res =USART_ReceiveData(UART4);//读取接收到的数据
-		
-				if(uart4_Res == 'A') Openmv_flag = 'A',OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'B') Openmv_flag = 'B', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'C') Openmv_flag = 'C', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'D') Openmv_flag = 'D', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'E') Openmv_flag = 'E', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'F') Openmv_flag = 'F', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'G') Openmv_flag = 'G', OpenmvRxCnt = 0, openmv_grab_pending = 1, LED2 = !LED2;
-				else if(uart4_Res == 'Q') Openmv_flag = 'Q', OpenmvRxCnt = 0, openmv_grab_pending = 0, LED3 = !LED3;
-				else 
-					{
-						if(Openmv_flag != 0)
-					{
-						OpenmvBuffer[OpenmvRxCnt] = uart4_Res;
-						if(OpenmvBuffer[OpenmvRxCnt] == 'X')  {   //获取X的误差 132X
-								OpenmvBuffer[OpenmvRxCnt] = '\n';//132\n
-								opemv_X = atoi((const char *)(OpenmvBuffer)); //132
-								memset(OpenmvBuffer, '\n', OpenmvRxCnt);
-								OpenmvRxCnt = 0;
-						}
-						if(OpenmvBuffer[OpenmvRxCnt] == 'Y')  {   //获取H的误差45Y
-								OpenmvBuffer[OpenmvRxCnt] = '\n';//45\n
-								opemv_Y = atoi((const char *)(OpenmvBuffer));//45
-								memset(OpenmvBuffer, '\n', OpenmvRxCnt);
-								OpenmvRxCnt = 0;
-								Openmv_flag = 0;
-								if (openmv_camera_test && openmv_drive_timer == 0) openmv_drive_timer = 10;
-								LED1 = !LED1;
-						}
-						OpenmvRxCnt++;
-					}
-				}
-				
-		  
-			USART_ClearITPendingBit(UART4, USART_IT_RXNE);//清除TIMx更新中断标志 
-	}
+        if ((uart4_Res >= 'A' && uart4_Res <= 'G'))
+        {
+            Openmv_flag = uart4_Res;
+            openmv_parse_flag = uart4_Res;
+            OpenmvRxCnt = 0;
+            memset(OpenmvBuffer, 0, sizeof(OpenmvBuffer));
+            LED2 = !LED2;
+        }
+        else if (uart4_Res == 'Q')
+        {
+            Openmv_flag = 'Q';
+            openmv_parse_flag = 0;
+            OpenmvRxCnt = 0;
+            openmv_has_target = 0;
+            openmv_grab_pending = 0;
+
+            uart_write_string(UART5, (uint8_t *)"MV Q\r\n");
+
+            /* 鐠嬪啳鐦梼鑸殿唽閿涙碍鏁归崚?Q 閸欘亝鐖ｇ拋棰佹丢婢惰京娲伴弽鍥风礉娑撳秴婀稉顓熸焽闁插瞼娲块幒銉ヤ粻鏉烇负鈧?
+             * 閼奉亜濮╃€电懓鍣幋鏍у繁閸掕埖铆缁夌粯绁寸拠鏇犳暠 TIM6 / BT 閹貉冨煑閵?
+             */
+//            if (Openmv_track_start)
+//            {
+//                my_car.v_x = 0.0f;
+//                my_car.v_y = 0.0f;
+//                my_car.w = 0.0f;
+//                my_car.stop_flag = 1;
+//            }
+
+            memset(OpenmvBuffer, 0, sizeof(OpenmvBuffer));
+            LED3 = !LED3;
+        }
+        else if (openmv_parse_flag != 0)
+        {
+            if ((uart4_Res >= '0' && uart4_Res <= '9') &&
+                OpenmvRxCnt < (sizeof(OpenmvBuffer) - 1))
+            {
+                OpenmvBuffer[OpenmvRxCnt++] = uart4_Res;
+            }
+            else if (uart4_Res == 'X')
+            {
+                OpenmvBuffer[OpenmvRxCnt] = '\0';
+                opemv_X = atoi((const char *)(OpenmvBuffer));
+
+                OpenmvRxCnt = 0;
+                memset(OpenmvBuffer, 0, sizeof(OpenmvBuffer));
+            }
+            else if (uart4_Res == 'Y')
+            {
+                OpenmvBuffer[OpenmvRxCnt] = '\0';
+                opemv_Y = atoi((const char *)(OpenmvBuffer));
+
+                OpenmvRxCnt = 0;
+                openmv_parse_flag = 0;
+                openmv_has_target = 1;
+                openmv_lost_ticks = 0;
+
+                {
+                    char dbg[64];
+                    sprintf(dbg, "MV A X=%d Y=%d\r\n", opemv_X, opemv_Y);
+                    uart_write_string(UART5, (uint8_t *)dbg);
+                }
+
+#if OPENMV_AUTO_START
+                camera_auto_align = 1;
+                Openmv_track_start = 1;
+                bt_drive_mode = 0;
+#endif
+
+                memset(OpenmvBuffer, 0, sizeof(OpenmvBuffer));
+
+                if (openmv_camera_test && openmv_drive_timer == 0)
+                {
+                    openmv_drive_timer = 10;
+                }
+
+                LED1 = !LED1;
+            }
+            else
+            {
+                openmv_parse_flag = 0;
+                OpenmvRxCnt = 0;
+                memset(OpenmvBuffer, 0, sizeof(OpenmvBuffer));
+            }
+        }
+
+        USART_ClearITPendingBit(UART4, USART_IT_RXNE);
+    }
 }
-
 
 /*
 QR_codeRx_Date/100000 
@@ -897,12 +1057,12 @@ QR_codeRx_Date/100000
 (QR_codeRx_Date/10)%10
 QR_codeRx_Date%10 
 */
-void UART5_IRQHandler(void)                	//串口5中断服务程序
+void UART5_IRQHandler(void)                	//娑撴彃褰?娑擃厽鏌囬張宥呭缁嬪绨?
 {
 
-  if (USART_GetITStatus(UART5, USART_IT_RXNE) == SET)//检查TIM7更新中断发生置位
+  if (USART_GetITStatus(UART5, USART_IT_RXNE) == SET)//濡偓閺岊櫄IM7閺囧瓨鏌婃稉顓熸焽閸欐垹鏁撶純顔荤秴
 	{
-			uart5_Res = USART_ReceiveData(UART5);//读取接收到的数据
+			uart5_Res = USART_ReceiveData(UART5);//鐠囪褰囬幒銉︽暪閸掓壆娈戦弫鐗堝祦
 			#if BT_USE_UART5
 			bt_cmd = uart5_Res;
 			bt_last_rx_tick = Timer7_count;
@@ -961,8 +1121,6 @@ void UART5_IRQHandler(void)                	//串口5中断服务程序
 //					}
 
 		  
-			USART_ClearITPendingBit(UART5, USART_IT_RXNE);//清除TIMx更新中断标志 
+			USART_ClearITPendingBit(UART5, USART_IT_RXNE);//濞撳懘娅嶵IMx閺囧瓨鏌婃稉顓熸焽閺嶅洤绻?
 	}
 }
-
-

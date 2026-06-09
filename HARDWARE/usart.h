@@ -17,7 +17,7 @@ extern unsigned char uart2_str_T_count;
 extern unsigned char uart2_str_flag;
 
 //X=288,Y=201为中心点位置
-#define opemv_middle_X		295
+#define opemv_middle_X		320
 #define opemv_middle_Y		240
 
 extern unsigned char QR_codeRxCnt;;
