@@ -16,6 +16,7 @@
 
 extern uint16_t Servo_clip_duty;
 extern uint16_t Servo_turntable_duty ;
+extern uint16_t Servo_turntable_target;
 extern uint16_t Servo_platform_duty;
 
 

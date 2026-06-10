@@ -8,14 +8,9 @@ int flag_do_task = -100; //-100=缁屾椽妫? -3~5=閼奉亜濮╂禒璇插�
 #define BT_LIFT_VEL 200
 #define BT_LIFT_ACC 0
 #define BT_TURNTABLE_STEP 10
-#define BT_PLATFORM_STEP 5
+#define BT_TURNTABLE_SMOOTH_STEP 10
+#define BT_PLATFORM_STEP 125
 #define BT_CLIP_STEP 2
-#define BT_PLATFORM_POS_1 10
-#define BT_PLATFORM_POS_2 135
-#define BT_PLATFORM_POS_3 260
-#define BT_CMD_PLATFORM_POS_1 'T'
-#define BT_CMD_PLATFORM_POS_2 'V'
-#define BT_CMD_PLATFORM_POS_3 'Y'
 #define BT_CMD_TASK_START 'M'
 
 static const uint16_t bt_clip_min = Servo_clip_loosen;
@@ -26,7 +21,8 @@ static const uint16_t bt_clip_max = Servo_clip_hold;
 //static const uint16_t bt_platform_max = Servo_platform_two;
 
 static volatile uint8_t bt_cmd = 0;
-static volatile uint8_t bt_speed_level = 2;
+static volatile uint8_t bt_speed_fast = 0;
+
 static volatile uint8_t bt_drive_mode = 1;
 static volatile float bt_vx = 0.0f;
 static volatile float bt_vy = 0.0f;
@@ -66,8 +62,8 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 		#endif
 	}
 
-	float speed = 20.0f + (float)bt_speed_level * 10.0f; // 20..70
-	float w = 0.4f + 0.1f * (float)bt_speed_level;       // 0.5..0.9
+	float speed = bt_speed_fast ? 60.0f : 10.0f;
+	float w = bt_speed_fast ? 0.8f : 0.3f;
 	uint16_t turntable_min = Servo_turntable_front;
 	uint16_t turntable_max = Servo_turntable_behind;
 	uint16_t turntable_mid = (uint16_t)((turntable_min + turntable_max) / 2);
@@ -76,24 +72,6 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 
 	switch (cmd)
 	{
-		case '1': if (is_press) bt_speed_level = 0; break;
-		case '2': if (is_press) bt_speed_level = 1; break;
-		case '3': if (is_press) bt_speed_level = 2; break;
-		case '4': if (is_press) bt_speed_level = 3; break;
-		case '5': if (is_press) bt_speed_level = 4; break;
-		case '+': // increase speed level (0..4)
-			if (is_press)
-			{
-				if (bt_speed_level < 4) bt_speed_level++;
-			}
-			break;
-		case '-': // decrease speed level
-			if (is_press)
-			{
-				if (bt_speed_level > 0) bt_speed_level--;
-			}
-			break;
-
 		case 'X': // explicit stop
 		case 'S':
 			bt_vx = 0.0f;
@@ -219,19 +197,19 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 			}
 			break;
 		case 'C': // turntable center (fixed at 250)
-			if (is_press) Servo_turntable_duty = 250;
+			if (is_press) Servo_turntable_target = 250;
 			break;
 		case 'G': // turntable position 250
-			if (is_press) Servo_turntable_duty = 250;
+			if (is_press) Servo_turntable_target = 250;
 			break;
 		case 'I': // turntable position 70
-			if (is_press) Servo_turntable_duty = 70;
+			if (is_press) Servo_turntable_target = 70;
 			break;
-		case 'H': // turntable position 205
-			if (is_press) Servo_turntable_duty = 205;
+		case 'H': // turntable position 210
+			if (is_press) Servo_turntable_target = 210;
 			break;
 		case 'W': // turntable position 180
-			if (is_press) Servo_turntable_duty = 180;
+			if (is_press) Servo_turntable_target = 180;
 			break;
 		case 'Q': // platform left
 			if (is_press)
@@ -245,21 +223,19 @@ static void BT_ApplyCommand(uint8_t raw_cmd)
 				Servo_platform_duty = constrain_uint16_t((uint16_t)(Servo_platform_duty - BT_PLATFORM_STEP), platform_min, platform_max);
 			}
 			break;
-		case 'V': // platform position 2 (135)
-			if (is_press) Servo_platform_duty = BT_PLATFORM_POS_2;
-			break;
-		case BT_CMD_PLATFORM_POS_1: // platform position 1 (10)
-			if (is_press) Servo_platform_duty = BT_PLATFORM_POS_1;
-			break;
-		case BT_CMD_PLATFORM_POS_3: // platform position 3 (260)
-			if (is_press) Servo_platform_duty = BT_PLATFORM_POS_3;
-			break;
 		case BT_CMD_TASK_START: // start auto task
 			if (is_press)
 			{
 				flag_do_task = -3;
 				bt_vx = 0.0f; bt_vy = 0.0f; bt_w = 0.0f; my_car.stop_flag = 1;
 			}
+			break;
+
+		case '1': // slow speed (fine adjust)
+			if (is_press) bt_speed_fast = 0;
+			break;
+		case '2': // fast speed (coarse adjust)
+			if (is_press) bt_speed_fast = 1;
 			break;
 
 		default:
@@ -478,6 +454,20 @@ void TIM7_IRQHandler(void)//10Hz,閿?.1s=100ms
 						Servo_clip_duty = constrain_uint16_t(next_clip, bt_clip_min, bt_clip_max);
 					}
 
+				if (Servo_turntable_duty < Servo_turntable_target)
+				{
+					Servo_turntable_duty = (uint16_t)(Servo_turntable_duty + BT_TURNTABLE_SMOOTH_STEP);
+					if (Servo_turntable_duty > Servo_turntable_target)
+						Servo_turntable_duty = Servo_turntable_target;
+				}
+				else if (Servo_turntable_duty > Servo_turntable_target)
+				{
+					if (Servo_turntable_duty > BT_TURNTABLE_SMOOTH_STEP)
+						Servo_turntable_duty = (uint16_t)(Servo_turntable_duty - BT_TURNTABLE_SMOOTH_STEP);
+					else
+						Servo_turntable_duty = Servo_turntable_target;
+				}
+
 				if (flag_do_task == -3)
 				{
 					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 500, false, false);
@@ -496,12 +486,12 @@ void TIM7_IRQHandler(void)//10Hz,閿?.1s=100ms
 					Timer7_count = 0;
 					flag_do_task = 0;
 				}
-				if (flag_do_task == 0 && Timer7_count >= 10)
-				{
-					Servo_turntable_duty = Servo_turntable_behind;
-					Timer7_count = 0;
-					flag_do_task = 1;
-				}
+			if (flag_do_task == 0 && Timer7_count >= 10)
+			{
+				Servo_turntable_target = Servo_turntable_behind;
+				Timer7_count = 0;
+				flag_do_task = 1;
+			}
 				if (flag_do_task == 1 && Timer7_count >= 10)
 				{
 					Emm_V5_Pos_Control(USART2, 1, 0, 500, 0, 500, false, false);
@@ -520,17 +510,17 @@ void TIM7_IRQHandler(void)//10Hz,閿?.1s=100ms
 					Timer7_count = 0;
 					flag_do_task = 4;
 				}
-				if (flag_do_task == 4 && Timer7_count >= 10)
-				{
-					Servo_turntable_duty = Servo_turntable_front;
-					Timer7_count = 0;
-					flag_do_task = 5;
-				}
-				if (flag_do_task == 5)
-				{
-					flag_do_task = -100;
-					bt_drive_mode = 1;
-				}
+			if (flag_do_task == 4 && Timer7_count >= 10)
+			{
+				Servo_turntable_target = Servo_turntable_front;
+				Timer7_count = 0;
+				flag_do_task = 5;
+			}
+			if (flag_do_task == 5)
+			{
+				flag_do_task = -100;
+				bt_drive_mode = 1;
+			}
 
 				LED3=!LED3;
 
