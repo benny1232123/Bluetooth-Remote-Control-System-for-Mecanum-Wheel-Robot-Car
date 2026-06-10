@@ -3,7 +3,7 @@
 
 #include "ALL_Head.h"
 
-#define Servo_clip_hold    270   //129-137
+#define Servo_clip_hold    280   //129-137
 #define Servo_clip_loosen  150 //90-103
 
 #define Servo_turntable_front   0

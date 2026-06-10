@@ -17,8 +17,8 @@ extern unsigned char uart2_str_T_count;
 extern unsigned char uart2_str_flag;
 
 //X=288,Y=201为中心点位置
-#define opemv_middle_X		320
-#define opemv_middle_Y		240
+#define opemv_middle_X		160
+#define opemv_middle_Y		120
 
 extern unsigned char QR_codeRxCnt;;
 extern unsigned char QR_codeBuffer[20];  //二维码模块中接受的字符串保存数组
