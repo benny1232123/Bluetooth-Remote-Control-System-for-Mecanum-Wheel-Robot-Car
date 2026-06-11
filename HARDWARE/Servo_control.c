@@ -107,6 +107,11 @@ void Servo_Init(void)
 		TIM_Cmd(TIM1,ENABLE);
     TIM_CtrlPWMOutputs(TIM1, ENABLE);
 		
+		// 启动后立即设置初始PWM值，避免舵机跳到0位
+		Servo_clip_SetAngle(Servo_clip_duty);
+		Servo_platform_SetAngle(Servo_platform_duty);
+		Servo_turntable_SetAngle(Servo_turntable_duty);
+		
 }
 
 void Servo_clip_SetAngle(uint16_t Angle)//צ��

@@ -9,7 +9,7 @@
 #define SWITCH1 P33_12
 #define SWITCH2 P33_13
 
-//¿ª¹Ø×´Ì¬±äÁ¿
+//ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½ï¿½ï¿½
 unsigned char key1_status = 1;
 unsigned char key2_status = 1;
 unsigned char key3_status = 1;
@@ -18,7 +18,7 @@ unsigned char key4_status = 1;
 unsigned char switch1_status = 1;
 unsigned char switch2_status = 1;
 
-//ÉÏÒ»´Î¿ª¹Ø×´Ì¬±äÁ¿
+//ï¿½ï¿½Ò»ï¿½Î¿ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½ï¿½ï¿½
 unsigned char key1_last_status;
 unsigned char key2_last_status;
 unsigned char key3_last_status;
@@ -27,7 +27,7 @@ unsigned char key4_last_status;
 unsigned char switch1_last_status;
 unsigned char switch2_last_status;
 
-//¿ª¹Ø±êÖ¾Î»
+//ï¿½ï¿½ï¿½Ø±ï¿½Ö¾Î»
 unsigned char key1_flag;
 unsigned char key2_flag;
 unsigned char key3_flag;
@@ -40,20 +40,20 @@ unsigned char switch2_flag;
 
 void Button_Control_init(void)
 {
-    // °´¼ü³õÊ¼»¯
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½
  	GPIO_InitTypeDef GPIO_InitStructure;
  
- 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE,ENABLE);//Ê¹ÄÜPORTEÊ±ÖÓ
+ 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE,ENABLE);//Ê¹ï¿½ï¿½PORTEÊ±ï¿½ï¿½
 
 	GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_0|GPIO_Pin_1|GPIO_Pin_2;//KEY0-KEY2
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; //ÉèÖÃ³ÉÉÏÀ­ÊäÈë
- 	GPIO_Init(GPIOE, &GPIO_InitStructure);//³õÊ¼»¯PE0 1 2
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; //ï¿½ï¿½ï¿½Ã³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ 	GPIO_Init(GPIOE, &GPIO_InitStructure);//ï¿½ï¿½Ê¼ï¿½ï¿½PE0 1 2
 
-	RCC_APB2PeriphClockCmd ( RCC_APB2Periph_GPIOA, ENABLE); 	//³õÊ¼»¯KEYÊ±ÖÓ	
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);		// ¿ªÆôIO¿Ú¸´ÓÃÊ±ÖÓ
-	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable,ENABLE);	//	½ûÓÃJTAG Ö»Ê¹ÓÃSWD	£¬²»È»PA15¡¢PB3¡¢PB4ÎÞ·¨Õý³£Ê¹ÓÃ
+	RCC_APB2PeriphClockCmd ( RCC_APB2Periph_GPIOA, ENABLE); 	//ï¿½ï¿½Ê¼ï¿½ï¿½KEYÊ±ï¿½ï¿½	
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);		// ï¿½ï¿½ï¿½ï¿½IOï¿½Ú¸ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable,ENABLE);	//	ï¿½ï¿½ï¿½ï¿½JTAG Ö»Ê¹ï¿½ï¿½SWD	ï¿½ï¿½ï¿½ï¿½È»PA15ï¿½ï¿½PB3ï¿½ï¿½PB4ï¿½Þ·ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;  
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; //ËÙ¶ÈÑ¡Ôñ
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; //ï¿½Ù¶ï¿½Ñ¡ï¿½ï¿½
 	GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_15;	 
 	GPIO_Init(GPIOA, &GPIO_InitStructure);	
 }
@@ -63,24 +63,30 @@ void Button_Control_init(void)
 
 void Button_Control_scan(void)
 {
-    //±£´æ°´¼ü×´Ì¬
-    key1_last_status = key1_status;
-    key2_last_status = key2_status;
-    key3_last_status = key3_status;
-    key4_last_status = key4_status;
+    static uint8_t debounce_cnt1 = 0, debounce_cnt2 = 0, debounce_cnt3 = 0, debounce_cnt4 = 0;
 
-    //¶ÁÈ¡µ±Ç°°´¼ü×´Ì¬
-    key1_status = GPIO_ReadInputDataBit(GPIOE,GPIO_Pin_0);
-    key2_status = GPIO_ReadInputDataBit(GPIOE,GPIO_Pin_1);
-    key3_status = GPIO_ReadInputDataBit(GPIOE,GPIO_Pin_2);
-    key4_status = GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_15);
+    uint8_t cur1 = GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_0);
+    uint8_t cur2 = GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_1);
+    uint8_t cur3 = GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_2);
+    uint8_t cur4 = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_15);
 
+    if (cur1 == key1_status) { if (debounce_cnt1 < 3) debounce_cnt1++; }
+    else                     { debounce_cnt1 = 0; }
+    if (cur2 == key2_status) { if (debounce_cnt2 < 3) debounce_cnt2++; }
+    else                     { debounce_cnt2 = 0; }
+    if (cur3 == key3_status) { if (debounce_cnt3 < 3) debounce_cnt3++; }
+    else                     { debounce_cnt3 = 0; }
+    if (cur4 == key4_status) { if (debounce_cnt4 < 3) debounce_cnt4++; }
+    else                     { debounce_cnt4 = 0; }
 
-    //¼ì²âµ½°´¼ü°´ÏÂÖ®ºó  ²¢·Å¿ªÖÃÎ»±êÖ¾Î»
+    if (debounce_cnt1 >= 3) { key1_last_status = key1_status; key1_status = cur1; }
+    if (debounce_cnt2 >= 3) { key2_last_status = key2_status; key2_status = cur2; }
+    if (debounce_cnt3 >= 3) { key3_last_status = key3_status; key3_status = cur3; }
+    if (debounce_cnt4 >= 3) { key4_last_status = key4_status; key4_status = cur4; }
+
     if (key1_status && !key1_last_status)    key1_flag = 1;
     if (key2_status && !key2_last_status)    key2_flag = 1;
     if (key3_status && !key3_last_status)    key3_flag = 1;
     if (key4_status && !key4_last_status)    key4_flag = 1;
-
 }
 
