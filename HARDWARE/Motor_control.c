@@ -172,7 +172,6 @@ void Motor_parameter_Init(void)
 	my_car.motor_4.encoder_count_all = 0;				//�������ۼ�ֵ
 	my_car.motor_4.encoder_count_r = 0;					//����������ֵ(��������)
 	my_car.motor_4.encoder_count_f = 0;					//��������λʱ�����ֵ���˲���
-	
 	//С������
 	my_car.target_yaw = 0;		//Ŀ��Ƕ�
 	my_car.v_x = 0;						//Ŀ������ٶȣ�����Ϊ����
@@ -614,4 +613,4 @@ void  mecanum(double v_y,double  v_x  ,double  w)
 //		limit(my_car.motor_3.target_speed, 200.0f); // �޷�
 //		limit(my_car.motor_4.target_speed, 200.0f); // �޷�
 }
-
+

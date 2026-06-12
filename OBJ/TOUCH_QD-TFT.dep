@@ -1,6 +1,6 @@
 Dependencies for Project 'TOUCH', Target 'QD-TFT': (DO NOT MODIFY !)
 CompilerVersion: 5060960::V5.06 update 7 (build 960)::.\ARMCC
-F (..\USER\main.c)(0x6A2AFC7A)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\main.o --omf_browse ..\obj\main.crf --depend ..\obj\main.d)
+F (..\USER\main.c)(0x6A2BA5FB)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\main.o --omf_browse ..\obj\main.crf --depend ..\obj\main.d)
 I (..\HARDWARE\ALL_Head.h)(0x6A267342)
 I (..\SYSTEM\sys\sys.h)(0x6A2671FE)
 I (..\USER\stm32f10x.h)(0x6A2671FE)
@@ -42,8 +42,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -148,8 +148,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -200,8 +200,8 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdbool.h)(0x5E8E2EB2)
 I (..\HARDWARE\led.h)(0x67D577AE)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -242,7 +242,7 @@ I (C:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x5E8E2EB2)
 I (..\SYSTEM\delay\delay.h)(0x6A2671FE)
 I (..\HARDWARE\SPI.h)(0x67179374)
 F (..\HARDWARE\lcd.h)(0x67D578CA)()
-F (..\HARDWARE\Motor_control.c)(0x6A2A6BB1)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\motor_control.o --omf_browse ..\obj\motor_control.crf --depend ..\obj\motor_control.d)
+F (..\HARDWARE\Motor_control.c)(0x6A2B9DE9)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\motor_control.o --omf_browse ..\obj\motor_control.crf --depend ..\obj\motor_control.d)
 I (..\HARDWARE\ALL_Head.h)(0x6A267342)
 I (..\SYSTEM\sys\sys.h)(0x6A2671FE)
 I (..\USER\stm32f10x.h)(0x6A2671FE)
@@ -284,14 +284,14 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
 I (..\HARDWARE\Button.h)(0x67D58E68)
 I (..\HARDWARE\fifo.h)(0x67211474)
-F (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)()
+F (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)()
 F (..\HARDWARE\pic.h)(0x6717932C)()
 F (..\HARDWARE\Servo_control.c)(0x6A2AB782)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\servo_control.o --omf_browse ..\obj\servo_control.crf --depend ..\obj\servo_control.d)
 I (..\HARDWARE\ALL_Head.h)(0x6A267342)
@@ -335,14 +335,14 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
 I (..\HARDWARE\Button.h)(0x67D58E68)
 I (..\HARDWARE\fifo.h)(0x67211474)
-F (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)()
+F (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)()
 F (..\HARDWARE\SPI.c)(0x6717C33E)(--c99 -c --cpu Cortex-M3 -g -O0 --apcs=interwork -I ..\HARDWARE\LED -I ..\SYSTEM\delay -I ..\SYSTEM\sys -I ..\USER -I ..\STM32F10x_FWLib\inc -I ..\CORE -I ..\HARDWARE-I.\RTE\_QD-TFT-IC:\Users\29408\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\Core\Include-IC:\Users\29408\AppData\Local\Arm\Packs\Keil\STM32F1xx_DFP\2.4.1\Device\Include-D__UVISION_VERSION="533" -D_RTE_ -DSTM32F10X_HD -D_RTE_ -DSTM32F10X_HD -DUSE_STDPERIPH_DRIVER-o ..\obj\spi.o --omf_browse ..\obj\spi.crf --depend ..\obj\spi.d)
 I (..\HARDWARE\spi.h)(0x67179374)
 I (..\SYSTEM\sys\sys.h)(0x6A2671FE)
@@ -416,8 +416,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -466,8 +466,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -516,8 +516,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -567,8 +567,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -617,8 +617,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -667,8 +667,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)
@@ -717,8 +717,8 @@ I (..\HARDWARE\lcd.h)(0x67D578CA)
 I (..\HARDWARE\gui.h)(0x67D29FB6)
 I (..\HARDWARE\Encoder.h)(0x6715AB00)
 I (..\HARDWARE\usart.h)(0x6A27C3C8)
-I (..\HARDWARE\Motor_control.h)(0x6A2A6BA9)
-I (..\HARDWARE\Servo_control.h)(0x6A2AEB7C)
+I (..\HARDWARE\Motor_control.h)(0x6A2B9DE9)
+I (..\HARDWARE\Servo_control.h)(0x6A2BA5FB)
 I (..\HARDWARE\Timer.h)(0x6722FAC8)
 I (..\HARDWARE\PID.h)(0x6719AFEE)
 I (..\HARDWARE\Emm_V5.h)(0x6721144C)

@@ -10,8 +10,8 @@
 #define Servo_turntable_behind  250
 
 #define Servo_platform_one   135
-#define Servo_platform_two   267
-#define Servo_platform_three  10
+#define Servo_platform_two   270
+#define Servo_platform_three  0
 
 
 extern uint16_t Servo_clip_duty;
